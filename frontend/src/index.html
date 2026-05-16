@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Experiment Reliability Control Plane</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">RCP</div>
+          <div>
+            <strong>Reliability Control</strong>
+            <span>Experiment operations</span>
+          </div>
+        </div>
+        <nav>
+          <a href="#dashboard" class="active">Dashboard</a>
+          <a href="#experiments">Experiments</a>
+          <a href="#rollout">Rollout</a>
+          <a href="#incident">Incident</a>
+          <a href="#trace">Trace</a>
+          <a href="#audit">Audit</a>
+        </nav>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">NYC production rollout</p>
+            <h1>Experiment & Reliability Control Plane</h1>
+          </div>
+          <div class="operator">Operator: <strong>maya@company.com</strong></div>
+        </header>
+
+        <section class="hero" id="dashboard">
+          <div>
+            <p class="eyebrow">Active demo scenario</p>
+            <h2 id="experiment-name">Loading experiment</h2>
+            <p id="experiment-description"></p>
+          </div>
+          <div class="hero-actions">
+            <button id="rollback-primary">Trigger rollback</button>
+            <button class="secondary" id="refresh">Refresh</button>
+          </div>
+        </section>
+
+        <section class="kpi-grid">
+          <article class="kpi">
+            <span>Rollout</span>
+            <strong id="rollout-kpi">--</strong>
+            <small id="rollout-sub">Treatment exposure</small>
+          </article>
+          <article class="kpi danger">
+            <span>p95 delta</span>
+            <strong id="p95-kpi">--</strong>
+            <small>Treatment vs control</small>
+          </article>
+          <article class="kpi danger">
+            <span>Error delta</span>
+            <strong id="error-kpi">--</strong>
+            <small>Percentage points</small>
+          </article>
+          <article class="kpi">
+            <span>Conversion delta</span>
+            <strong id="conversion-kpi">--</strong>
+            <small>Product outcome</small>
+          </article>
+        </section>
+
+        <section class="grid two">
+          <article class="panel" id="experiments">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Experiments</p>
+                <h3>Release health</h3>
+              </div>
+              <input id="assignment-user" value="user-90210" aria-label="User id for assignment" />
+            </div>
+            <div id="experiment-list" class="experiment-list"></div>
+            <div id="assignment-result" class="assignment"></div>
+          </article>
+
+          <article class="panel" id="rollout">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Rollout control</p>
+                <h3>Exposure guardrail</h3>
+              </div>
+              <span id="status-pill" class="pill">--</span>
+            </div>
+            <label class="range-label" for="rollout-slider">
+              Treatment traffic
+              <strong id="rollout-value">--</strong>
+            </label>
+            <input id="rollout-slider" min="0" max="100" step="5" type="range" />
+            <div class="button-row">
+              <button data-rollout="10">10%</button>
+              <button data-rollout="25">25%</button>
+              <button data-rollout="50">50%</button>
+              <button class="secondary" data-rollout="0">Pause</button>
+            </div>
+          </article>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Metrics</p>
+              <h3>Control vs treatment</h3>
+            </div>
+            <span class="pill danger" id="regression-pill">Analyzing</span>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="metric-chart" width="980" height="300"></canvas>
+          </div>
+          <div id="regression-reasons" class="reasons"></div>
+        </section>
+
+        <section class="grid two">
+          <article class="panel" id="incident">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Incident</p>
+                <h3 id="incident-title">Timeline</h3>
+              </div>
+              <button id="rollback-secondary">Rollback</button>
+            </div>
+            <p id="incident-summary" class="muted"></p>
+            <div id="timeline" class="timeline"></div>
+          </article>
+
+          <article class="panel" id="trace">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Trace explorer</p>
+                <h3 id="trace-id">Trace</h3>
+              </div>
+              <span id="trace-status" class="pill danger">--</span>
+            </div>
+            <p id="trace-reason" class="muted"></p>
+            <div id="spans" class="spans"></div>
+          </article>
+        </section>
+
+        <section class="panel" id="audit">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Audit log</p>
+              <h3>Production changes</h3>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Actor</th>
+                  <th>Action</th>
+                  <th>Change</th>
+                </tr>
+              </thead>
+              <tbody id="audit-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

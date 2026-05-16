@@ -1,0 +1,16 @@
+{
+  "name": "experiment-reliability-control-plane",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Full-stack experiment, rollout, and reliability control plane demo.",
+  "type": "module",
+  "scripts": {
+    "dev": "node backend/src/server.js",
+    "start": "node backend/src/server.js",
+    "test": "node --test tests/*.test.js",
+    "seed": "node scripts/seed.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

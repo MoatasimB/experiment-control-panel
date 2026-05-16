@@ -1,0 +1,107 @@
+{
+  "services": [
+    { "id": "search-api", "name": "Search API", "owner": "Discovery Platform" },
+    { "id": "ranker", "name": "Ranking Service", "owner": "ML Ranking" },
+    { "id": "feature-store", "name": "Feature Store", "owner": "Data Platform" },
+    { "id": "ads-mixer", "name": "Ads Mixer", "owner": "Monetization" }
+  ],
+  "experiments": [
+    {
+      "id": "ranking-v2",
+      "name": "Search Ranking V2",
+      "serviceId": "search-api",
+      "owner": "Discovery Platform",
+      "status": "degraded",
+      "description": "New ranking model for NYC query traffic with staged treatment rollout.",
+      "rolloutPercentage": 50,
+      "previousRolloutPercentage": 10,
+      "targeting": {
+        "regions": ["NYC"],
+        "segments": ["signed_in", "high_intent"],
+        "services": ["search-api", "ranker"]
+      },
+      "variants": [
+        { "id": "control", "name": "Control", "weight": 50 },
+        { "id": "treatment", "name": "Ranking V2", "weight": 50 }
+      ],
+      "createdBy": "maya@company.com",
+      "createdAt": "2026-05-12T14:00:00.000Z",
+      "updatedAt": "2026-05-16T13:25:00.000Z"
+    },
+    {
+      "id": "checkout-hints",
+      "name": "Checkout Intent Hints",
+      "serviceId": "checkout-api",
+      "owner": "Commerce UX",
+      "status": "healthy",
+      "description": "Inline helper copy for checkout completion.",
+      "rolloutPercentage": 25,
+      "previousRolloutPercentage": 10,
+      "targeting": {
+        "regions": ["US"],
+        "segments": ["signed_in"],
+        "services": ["checkout-api"]
+      },
+      "variants": [
+        { "id": "control", "name": "Control", "weight": 75 },
+        { "id": "treatment", "name": "Hints", "weight": 25 }
+      ],
+      "createdBy": "leo@company.com",
+      "createdAt": "2026-05-08T17:00:00.000Z",
+      "updatedAt": "2026-05-15T19:30:00.000Z"
+    }
+  ],
+  "metricWindows": [
+    { "experimentId": "ranking-v2", "bucket": "control", "time": "09:00", "p50": 74, "p95": 210, "errorRate": 0.7, "conversion": 6.8, "completion": 82 },
+    { "experimentId": "ranking-v2", "bucket": "treatment", "time": "09:00", "p50": 78, "p95": 218, "errorRate": 0.8, "conversion": 7.1, "completion": 83 },
+    { "experimentId": "ranking-v2", "bucket": "control", "time": "10:00", "p50": 75, "p95": 214, "errorRate": 0.7, "conversion": 6.9, "completion": 82 },
+    { "experimentId": "ranking-v2", "bucket": "treatment", "time": "10:00", "p50": 82, "p95": 226, "errorRate": 0.9, "conversion": 7.2, "completion": 83 },
+    { "experimentId": "ranking-v2", "bucket": "control", "time": "11:00", "p50": 76, "p95": 219, "errorRate": 0.8, "conversion": 6.8, "completion": 81 },
+    { "experimentId": "ranking-v2", "bucket": "treatment", "time": "11:00", "p50": 94, "p95": 310, "errorRate": 1.9, "conversion": 6.7, "completion": 78 },
+    { "experimentId": "ranking-v2", "bucket": "control", "time": "12:00", "p50": 78, "p95": 225, "errorRate": 0.8, "conversion": 6.9, "completion": 81 },
+    { "experimentId": "ranking-v2", "bucket": "treatment", "time": "12:00", "p50": 132, "p95": 520, "errorRate": 4.6, "conversion": 5.9, "completion": 70 },
+    { "experimentId": "ranking-v2", "bucket": "control", "time": "13:00", "p50": 77, "p95": 221, "errorRate": 0.8, "conversion": 6.7, "completion": 82 },
+    { "experimentId": "ranking-v2", "bucket": "treatment", "time": "13:00", "p50": 141, "p95": 610, "errorRate": 5.2, "conversion": 5.4, "completion": 66 },
+    { "experimentId": "checkout-hints", "bucket": "control", "time": "13:00", "p50": 93, "p95": 260, "errorRate": 0.6, "conversion": 11.4, "completion": 88 },
+    { "experimentId": "checkout-hints", "bucket": "treatment", "time": "13:00", "p50": 95, "p95": 268, "errorRate": 0.6, "conversion": 12.1, "completion": 89 }
+  ],
+  "incidents": [
+    {
+      "id": "inc-1042",
+      "experimentId": "ranking-v2",
+      "title": "Treatment p95 latency and errors spiked after 50% rollout",
+      "severity": "SEV2",
+      "status": "open",
+      "openedAt": "2026-05-16T13:31:00.000Z",
+      "summary": "The regression detector found a 176% p95 latency increase and elevated errors for treatment traffic.",
+      "recommendedAction": "Rollback ranking-v2 to 0% and investigate feature-store timeout amplification.",
+      "timeline": [
+        { "time": "12:04", "type": "rollout", "text": "Rollout increased from 10% to 50% for NYC signed-in traffic." },
+        { "time": "12:17", "type": "metric", "text": "Treatment p95 crossed 500ms while control remained near 225ms." },
+        { "time": "12:22", "type": "alert", "text": "Regression detector opened SEV2 incident for latency and error deltas." },
+        { "time": "12:29", "type": "trace", "text": "Trace trc-8f4a showed feature-store timeout retries from ranker." }
+      ]
+    }
+  ],
+  "traces": [
+    {
+      "id": "trc-8f4a",
+      "experimentId": "ranking-v2",
+      "bucket": "treatment",
+      "userId": "user-90210",
+      "status": "failed",
+      "durationMs": 1240,
+      "failureReason": "feature-store timed out after retry budget was exhausted",
+      "spans": [
+        { "service": "search-api", "operation": "GET /search", "durationMs": 1240, "status": "error" },
+        { "service": "ranker", "operation": "scoreCandidates", "durationMs": 1110, "status": "error" },
+        { "service": "feature-store", "operation": "batchFetchFeatures", "durationMs": 980, "status": "timeout" },
+        { "service": "ads-mixer", "operation": "blendResults", "durationMs": 44, "status": "ok" }
+      ]
+    }
+  ],
+  "auditEvents": [
+    { "id": "aud-1", "time": "2026-05-16T12:04:00.000Z", "actor": "maya@company.com", "action": "rollout.updated", "experimentId": "ranking-v2", "from": "10%", "to": "50%" },
+    { "id": "aud-2", "time": "2026-05-16T12:22:00.000Z", "actor": "detector@system", "action": "incident.opened", "experimentId": "ranking-v2", "from": "healthy", "to": "degraded" }
+  ]
+}

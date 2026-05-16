@@ -1,0 +1,9 @@
+services:
+  control-plane:
+    image: node:22-alpine
+    working_dir: /app
+    command: npm run dev
+    ports:
+      - "4173:4173"
+    volumes:
+      - ../..:/app
