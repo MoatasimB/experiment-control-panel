@@ -4,8 +4,6 @@ A full-stack internal engineering tool for managing staged rollouts, A/B experim
 
 This project is intentionally scoped around one polished demo story: a ranking experiment moves from 10% to 50%, treatment latency and error rate spike, the detector opens an incident, traces reveal a downstream dependency issue, and rollback recovers the system.
 
-## Why This Works For A Google TM Resume
-
 The project is stronger than a generic dashboard because it demonstrates:
 
 - deterministic user bucketing and rollout control
@@ -14,12 +12,6 @@ The project is stronger than a generic dashboard because it demonstrates:
 - trace-driven debugging
 - incident timeline and rollback workflow
 - auditability around production changes
-
-Resume bullet direction:
-
-- Built a full-stack experiment and rollout control plane for staged feature launches, deterministic user assignment, reliability monitoring, and rollback workflows.
-- Implemented metric aggregation and regression detection for latency, error rate, and conversion deltas across control/treatment cohorts.
-- Designed an incident investigation flow linking rollout changes, alerts, traces, downstream service failures, and audit events.
 
 ## Run Locally
 
@@ -63,8 +55,6 @@ backend/
 tests/
   *.test.js       service-level tests
 ```
-
-The implementation is deliberately dependency-light so hiring managers can run it quickly. A production version would swap the in-memory repository for Postgres, move aggregation to workers, add authentication/authorization, and expose the frontend through React + TypeScript.
 
 ## API Surface
 
