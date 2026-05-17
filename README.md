@@ -57,6 +57,51 @@ npm test
 
 Tests cover deterministic bucketing, regression detection, and rollback behavior.
 
+## Local Postgres
+
+Start the local Postgres database:
+
+```bash
+npm run db:up
+```
+
+Connection string:
+
+```text
+postgresql://rcp_user:rcp_password@localhost:5432/rcp_dev
+```
+
+For backend integration, copy `.env.example` to `.env` and keep the same `DATABASE_URL` unless you change the database credentials.
+
+Open a SQL shell:
+
+```bash
+npm run db:psql
+```
+
+Reset all local database data:
+
+```bash
+npm run db:reset
+```
+
+The schema and seed data live in:
+
+```text
+backend/db/schema.sql
+backend/db/seed.sql
+```
+
+You can connect pgAdmin to the same database using:
+
+```text
+Host: localhost
+Port: 5432
+Database: rcp_dev
+Username: rcp_user
+Password: rcp_password
+```
+
 ## Architecture
 
 ```text
@@ -67,6 +112,9 @@ frontend/
     types.ts      frontend domain types
     styles.css    dashboard/control-plane styling
 backend/
+  db/
+    schema.sql    Postgres schema
+    seed.sql      local database seed data
   src/
     api/          route handling
     models/       domain defaults
