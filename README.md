@@ -15,8 +15,16 @@ The project is stronger than a generic dashboard because it demonstrates:
 
 ## Run Locally
 
+Install dependencies:
+
 ```bash
 npm install
+```
+
+For API + built frontend:
+
+```bash
+npm run build
 npm run dev
 ```
 
@@ -26,7 +34,20 @@ Then open:
 http://localhost:4173
 ```
 
-No third-party runtime dependencies are required. The backend uses Node's built-in HTTP server and serves both the REST API and the frontend.
+For active React development, run two terminals:
+
+```bash
+npm run dev:api
+npm run dev:web
+```
+
+Then open:
+
+```text
+http://localhost:5173
+```
+
+The Vite frontend proxies `/api` requests to the Node backend on port `4173`.
 
 ## Test
 
@@ -41,7 +62,9 @@ Tests cover deterministic bucketing, regression detection, and rollback behavior
 ```text
 frontend/
   src/
-    app.js        single-page product UI
+    App.tsx       React control-plane UI
+    api.ts        typed API client
+    types.ts      frontend domain types
     styles.css    dashboard/control-plane styling
 backend/
   src/
