@@ -27,27 +27,27 @@ export function createRouter(store, publicDir) {
 
 async function routeApi(req, res, url, store) {
   if (req.method === "GET" && url.pathname === "/api/demo") {
-    const experiment = store.getExperiment("ranking-v2");
-    const regression = detectRegression(store.metricsFor(experiment.id));
+    const experiment = await store.getExperiment("ranking-v2");
+    const regression = detectRegression(await store.metricsFor(experiment.id));
     sendJson(res, 200, {
       experiment,
       metrics: regression.summary,
       regression,
-      incidents: store.listIncidents(),
-      trace: store.getTrace("trc-8f4a"),
-      audit: store.listAuditEvents()
+      incidents: await store.listIncidents(),
+      trace: await store.getTrace("trc-8f4a"),
+      audit: await store.listAuditEvents()
     });
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/api/experiments") {
-    sendJson(res, 200, store.listExperiments());
+    sendJson(res, 200, await store.listExperiments());
     return;
   }
 
   const experimentMatch = url.pathname.match(/^\/api\/experiments\/([^/]+)$/);
   if (req.method === "GET" && experimentMatch) {
-    const experiment = store.getExperiment(experimentMatch[1]);
+    const experiment = await store.getExperiment(experimentMatch[1]);
     sendJson(res, experiment ? 200 : 404, experiment || { error: "Experiment not found" });
     return;
   }
@@ -55,14 +55,14 @@ async function routeApi(req, res, url, store) {
   const rolloutMatch = url.pathname.match(/^\/api\/experiments\/([^/]+)\/rollout$/);
   if (req.method === "PATCH" && rolloutMatch) {
     const body = await readJson(req);
-    const experiment = updateRollout(store, rolloutMatch[1], body.rolloutPercentage, body.actor);
+    const experiment = await updateRollout(store, rolloutMatch[1], body.rolloutPercentage, body.actor);
     sendJson(res, experiment ? 200 : 404, experiment || { error: "Experiment not found" });
     return;
   }
 
   if (req.method === "POST" && url.pathname === "/api/assignments") {
     const body = await readJson(req);
-    const experiment = store.getExperiment(body.experimentId);
+    const experiment = await store.getExperiment(body.experimentId);
     if (!experiment) {
       sendJson(res, 404, { error: "Experiment not found" });
       return;
@@ -77,37 +77,37 @@ async function routeApi(req, res, url, store) {
 
   if (req.method === "POST" && url.pathname === "/api/metrics/events") {
     const body = await readJson(req);
-    sendJson(res, 201, store.addMetricEvent(body));
+    sendJson(res, 201, await store.addMetricEvent(body));
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/api/metrics/summary") {
     const experimentId = url.searchParams.get("experiment_id");
-    sendJson(res, 200, summarizeMetrics(store.metricsFor(experimentId)));
+    sendJson(res, 200, summarizeMetrics(await store.metricsFor(experimentId)));
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/api/incidents") {
-    sendJson(res, 200, store.listIncidents());
+    sendJson(res, 200, await store.listIncidents());
     return;
   }
 
   const rollbackMatch = url.pathname.match(/^\/api\/incidents\/([^/]+)\/rollback$/);
   if (req.method === "POST" && rollbackMatch) {
     const body = await readJson(req);
-    const result = rollbackIncident(store, rollbackMatch[1], body.actor);
+    const result = await rollbackIncident(store, rollbackMatch[1], body.actor);
     sendJson(res, result ? 200 : 404, result || { error: "Incident not found" });
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/api/audit") {
-    sendJson(res, 200, store.listAuditEvents());
+    sendJson(res, 200, await store.listAuditEvents());
     return;
   }
 
   const traceMatch = url.pathname.match(/^\/api\/traces\/([^/]+)$/);
   if (req.method === "GET" && traceMatch) {
-    const trace = store.getTrace(traceMatch[1]);
+    const trace = await store.getTrace(traceMatch[1]);
     sendJson(res, trace ? 200 : 404, trace || { error: "Trace not found" });
     return;
   }

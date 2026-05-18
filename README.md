@@ -68,7 +68,7 @@ npm run db:up
 Connection string:
 
 ```text
-postgresql://rcp_user:rcp_password@localhost:5432/rcp_dev
+postgresql://rcp_user:rcp_password@127.0.0.1:55432/rcp_dev
 ```
 
 For backend integration, copy `.env.example` to `.env` and keep the same `DATABASE_URL` unless you change the database credentials.
@@ -96,7 +96,7 @@ You can connect pgAdmin to the same database using:
 
 ```text
 Host: localhost
-Port: 5432
+Port: 55432
 Database: rcp_dev
 Username: rcp_user
 Password: rcp_password

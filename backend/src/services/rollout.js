@@ -1,20 +1,21 @@
 import { STATUS } from "../models/domain.js";
+import { executeRollbackAction } from "./rollbackAdapters.js";
 
-export function updateRollout(store, experimentId, percentage, actor = "operator@local") {
-  const experiment = store.getExperiment(experimentId);
+export async function updateRollout(store, experimentId, percentage, actor = "operator@local") {
+  const experiment = await store.getExperiment(experimentId);
   if (!experiment) return null;
 
   const previous = experiment.rolloutPercentage;
   const next = Math.max(0, Math.min(100, Number(percentage)));
   const status = next === 0 ? STATUS.PAUSED : experiment.status;
 
-  const updated = store.updateExperiment(experimentId, {
+  const updated = await store.updateExperiment(experimentId, {
     previousRolloutPercentage: previous,
     rolloutPercentage: next,
     status
   });
 
-  store.addAuditEvent({
+  await store.addAuditEvent({
     actor,
     action: "rollout.updated",
     experimentId,
@@ -25,21 +26,33 @@ export function updateRollout(store, experimentId, percentage, actor = "operator
   return updated;
 }
 
-export function rollbackIncident(store, incidentId, actor = "operator@local") {
-  const incident = store.getIncident(incidentId);
+export async function rollbackIncident(store, incidentId, actor = "operator@local") {
+  const run = async (repository) => rollbackIncidentInStore(repository, incidentId, actor);
+
+  if (typeof store.transaction === "function") {
+    return store.transaction(run);
+  }
+
+  return run(store);
+}
+
+async function rollbackIncidentInStore(store, incidentId, actor) {
+  const incident = await store.getIncident(incidentId);
   if (!incident) return null;
 
-  const experiment = store.getExperiment(incident.experimentId);
+  const experiment = await store.getExperiment(incident.experimentId);
   if (!experiment) return null;
 
   const previous = experiment.rolloutPercentage;
-  store.updateExperiment(experiment.id, {
+  const rollbackAction = await executeRollbackAction({ experiment, actor });
+
+  await store.updateExperiment(experiment.id, {
     previousRolloutPercentage: previous,
     rolloutPercentage: 0,
     status: STATUS.ROLLED_BACK
   });
 
-  const updatedIncident = store.updateIncident(incidentId, {
+  const updatedIncident = await store.updateIncident(incidentId, {
     status: "mitigated",
     mitigatedAt: new Date().toISOString(),
     timeline: [
@@ -48,7 +61,7 @@ export function rollbackIncident(store, incidentId, actor = "operator@local") {
     ]
   });
 
-  store.addAuditEvent({
+  await store.addAuditEvent({
     actor,
     action: "rollback.triggered",
     experimentId: experiment.id,
@@ -56,7 +69,11 @@ export function rollbackIncident(store, incidentId, actor = "operator@local") {
     to: "0%"
   });
 
-  return { incident: updatedIncident, experiment: store.getExperiment(experiment.id) };
+  return {
+    incident: updatedIncident,
+    experiment: await store.getExperiment(experiment.id),
+    rollbackAction
+  };
 }
 
 function currentTime() {

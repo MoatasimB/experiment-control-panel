@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: rcp_user
       POSTGRES_PASSWORD: rcp_password
     ports:
-      - "5432:5432"
+      - "55432:5432"
     volumes:
       - rcp_postgres_data:/var/lib/postgresql/data
       - ./backend/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
