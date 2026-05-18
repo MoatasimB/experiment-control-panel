@@ -70,6 +70,12 @@ export class PostgresStore {
   }
 
   async addMetricEvent(event) {
+    if (event.durationMs !== undefined) {
+      await this.addRawMetricEvent(event);
+      await this.refreshMetricWindow(event.experimentId, event.bucket);
+      return event;
+    }
+
     await this.pool.query(`
       INSERT INTO metric_windows (
         experiment_id,
@@ -100,6 +106,99 @@ export class PostgresStore {
     ]);
 
     return event;
+  }
+
+  async addRawMetricEvent(event) {
+    await this.pool.query(`
+      INSERT INTO metric_events (
+        experiment_id,
+        bucket,
+        user_id,
+        service,
+        route,
+        status_code,
+        duration_ms,
+        conversion,
+        completion,
+        trace_id,
+        release_sha
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    `, [
+      event.experimentId,
+      event.bucket,
+      event.userId,
+      event.service || "target-search",
+      event.route || "/search",
+      event.statusCode,
+      event.durationMs,
+      Boolean(event.conversion),
+      event.completion !== false,
+      event.traceId,
+      event.releaseSha
+    ]);
+  }
+
+  async refreshMetricWindow(experimentId, bucket) {
+    const { rows } = await this.pool.query(`
+      WITH recent AS (
+        SELECT *
+        FROM metric_events
+        WHERE experiment_id = $1
+          AND bucket = $2
+          AND created_at >= now() - interval '5 minutes'
+      ),
+      aggregate AS (
+        SELECT
+          COUNT(*)::numeric AS total,
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms) AS p50_ms,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) AS p95_ms,
+          (COUNT(*) FILTER (WHERE status_code >= 500)::numeric / NULLIF(COUNT(*), 0)) * 100 AS error_rate,
+          (COUNT(*) FILTER (WHERE conversion)::numeric / NULLIF(COUNT(*), 0)) * 100 AS conversion,
+          (COUNT(*) FILTER (WHERE completion)::numeric / NULLIF(COUNT(*), 0)) * 100 AS completion
+        FROM recent
+      )
+      SELECT *
+      FROM aggregate
+      WHERE total > 0
+    `, [experimentId, bucket]);
+
+    if (!rows[0]) return;
+
+    const windowLabel = new Intl.DateTimeFormat("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "America/New_York"
+    }).format(new Date());
+
+    await this.pool.query(`
+      INSERT INTO metric_windows (
+        experiment_id,
+        bucket,
+        window_label,
+        p50_ms,
+        p95_ms,
+        error_rate,
+        conversion,
+        completion
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ON CONFLICT (experiment_id, bucket, window_label)
+      DO UPDATE SET
+        p50_ms = EXCLUDED.p50_ms,
+        p95_ms = EXCLUDED.p95_ms,
+        error_rate = EXCLUDED.error_rate,
+        conversion = EXCLUDED.conversion,
+        completion = EXCLUDED.completion
+    `, [
+      experimentId,
+      bucket,
+      windowLabel,
+      rows[0].p50_ms,
+      rows[0].p95_ms,
+      rows[0].error_rate,
+      rows[0].conversion,
+      rows[0].completion
+    ]);
   }
 
   async metricsFor(experimentId) {

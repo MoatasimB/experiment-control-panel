@@ -49,6 +49,32 @@ http://localhost:5173
 
 The Vite frontend proxies `/api` requests to the Node backend on port `4173`.
 
+Run the local target app in a third terminal:
+
+```bash
+npm run dev:target
+```
+
+Then generate simulated search traffic:
+
+```bash
+npm run traffic -- 100
+```
+
+The target app runs at:
+
+```text
+http://127.0.0.1:4180
+```
+
+Example request:
+
+```text
+http://127.0.0.1:4180/search?user_id=user-90210&q=nyc%20pizza
+```
+
+The target app asks the control plane for a control/treatment assignment, simulates search latency and errors, then posts a metric event back to `POST /api/metrics/events`.
+
 ## Test
 
 ```bash

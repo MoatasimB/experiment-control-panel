@@ -18,5 +18,41 @@ services:
       timeout: 5s
       retries: 10
 
+  control-plane:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run build && npm run dev"
+    environment:
+      DATABASE_URL: postgresql://rcp_user:rcp_password@postgres:5432/rcp_dev
+      HOST: 0.0.0.0
+      PORT: 4173
+    ports:
+      - "4173:4173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  target-app:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev:target"
+    environment:
+      HOST: 0.0.0.0
+      TARGET_APP_PORT: 4180
+      CONTROL_PLANE_URL: http://control-plane:4173
+      EXPERIMENT_ID: ranking-v2
+      SERVICE_NAME: target-search
+      RELEASE_SHA: local-ranking-v2
+    ports:
+      - "4180:4180"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - control-plane
+
 volumes:
   rcp_postgres_data:

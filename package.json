@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "node backend/src/server.js",
     "dev:api": "node backend/src/server.js",
+    "dev:target": "node target-app/src/server.js",
     "dev:web": "vite frontend --host 127.0.0.1",
     "build": "vite build frontend",
     "preview": "npm run build && node backend/src/server.js",
@@ -16,7 +17,8 @@
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d postgres",
-    "db:psql": "docker compose exec postgres psql -U rcp_user -d rcp_dev"
+    "db:psql": "docker compose exec postgres psql -U rcp_user -d rcp_dev",
+    "traffic": "node scripts/generateTraffic.js"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",

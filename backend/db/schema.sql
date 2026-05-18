@@ -43,6 +43,22 @@ CREATE TABLE IF NOT EXISTS metric_windows (
   UNIQUE (experiment_id, bucket, window_label)
 );
 
+CREATE TABLE IF NOT EXISTS metric_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  experiment_id TEXT NOT NULL REFERENCES experiments(id) ON DELETE CASCADE,
+  bucket TEXT NOT NULL CHECK (bucket IN ('control', 'treatment')),
+  user_id TEXT NOT NULL,
+  service TEXT NOT NULL,
+  route TEXT NOT NULL,
+  status_code INTEGER NOT NULL,
+  duration_ms INTEGER NOT NULL,
+  conversion BOOLEAN NOT NULL DEFAULT false,
+  completion BOOLEAN NOT NULL DEFAULT true,
+  trace_id TEXT,
+  release_sha TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS incidents (
   id TEXT PRIMARY KEY,
   experiment_id TEXT NOT NULL REFERENCES experiments(id) ON DELETE CASCADE,
@@ -108,6 +124,8 @@ CREATE TABLE IF NOT EXISTS cloud_run_revisions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_metric_windows_experiment_bucket ON metric_windows(experiment_id, bucket);
+CREATE INDEX IF NOT EXISTS idx_metric_events_experiment_created ON metric_events(experiment_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_metric_events_experiment_bucket_created ON metric_events(experiment_id, bucket, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_events_experiment_time ON audit_events(experiment_id, event_time DESC);
 CREATE INDEX IF NOT EXISTS idx_incident_timeline_incident_order ON incident_timeline_events(incident_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_trace_spans_trace_order ON trace_spans(trace_id, sort_order);

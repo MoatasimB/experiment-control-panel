@@ -31,7 +31,25 @@ export class Store {
   }
 
   addMetricEvent(event) {
-    this.metricWindows.push(event);
+    if (event.durationMs !== undefined) {
+      this.metricWindows.push({
+        experimentId: event.experimentId,
+        bucket: event.bucket,
+        time: event.time || new Intl.DateTimeFormat("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+          timeZone: "America/New_York"
+        }).format(new Date()),
+        p50: event.durationMs,
+        p95: event.durationMs,
+        errorRate: event.statusCode >= 500 ? 100 : 0,
+        conversion: event.conversion ? 100 : 0,
+        completion: event.completion === false ? 0 : 100
+      });
+    } else {
+      this.metricWindows.push(event);
+    }
     return event;
   }
 
