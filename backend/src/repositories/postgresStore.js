@@ -1,3 +1,32 @@
+const EXPERIMENT_WITH_VARIANTS = `
+  SELECT
+    e.*,
+    COALESCE(
+      json_agg(
+        json_build_object('id', v.id, 'name', v.name, 'weight', v.weight)
+        ORDER BY v.id
+      ) FILTER (WHERE v.id IS NOT NULL),
+      '[]'
+    ) AS variants
+  FROM experiments e
+  LEFT JOIN variants v ON v.experiment_id = e.id
+`;
+
+const EXPERIMENT_COLUMNS = {
+  previousRolloutPercentage: "previous_rollout_percentage",
+  rolloutPercentage: "rollout_percentage",
+  status: "status"
+};
+
+const INCIDENT_COLUMNS = {
+  status: "status",
+  title: "title",
+  severity: "severity",
+  summary: "summary",
+  recommendedAction: "recommended_action",
+  mitigatedAt: "mitigated_at"
+};
+
 export class PostgresStore {
   constructor(pool) {
     this.pool = pool;
@@ -5,17 +34,7 @@ export class PostgresStore {
 
   async listExperiments() {
     const { rows } = await this.pool.query(`
-      SELECT
-        e.*,
-        COALESCE(
-          json_agg(
-            json_build_object('id', v.id, 'name', v.name, 'weight', v.weight)
-            ORDER BY v.id
-          ) FILTER (WHERE v.id IS NOT NULL),
-          '[]'
-        ) AS variants
-      FROM experiments e
-      LEFT JOIN variants v ON v.experiment_id = e.id
+      ${EXPERIMENT_WITH_VARIANTS}
       GROUP BY e.id
       ORDER BY e.updated_at DESC
     `);
@@ -24,17 +43,7 @@ export class PostgresStore {
 
   async getExperiment(id) {
     const { rows } = await this.pool.query(`
-      SELECT
-        e.*,
-        COALESCE(
-          json_agg(
-            json_build_object('id', v.id, 'name', v.name, 'weight', v.weight)
-            ORDER BY v.id
-          ) FILTER (WHERE v.id IS NOT NULL),
-          '[]'
-        ) AS variants
-      FROM experiments e
-      LEFT JOIN variants v ON v.experiment_id = e.id
+      ${EXPERIMENT_WITH_VARIANTS}
       WHERE e.id = $1
       GROUP BY e.id
     `, [id]);
@@ -42,20 +51,7 @@ export class PostgresStore {
   }
 
   async updateExperiment(id, patch) {
-    const updates = [];
-    const values = [];
-    const columns = {
-      previousRolloutPercentage: "previous_rollout_percentage",
-      rolloutPercentage: "rollout_percentage",
-      status: "status"
-    };
-
-    for (const [key, column] of Object.entries(columns)) {
-      if (patch[key] !== undefined) {
-        values.push(patch[key]);
-        updates.push(`${column} = $${values.length}`);
-      }
-    }
+    const { updates, values } = buildUpdate(patch, EXPERIMENT_COLUMNS);
 
     if (updates.length) {
       values.push(id);
@@ -76,25 +72,7 @@ export class PostgresStore {
       return event;
     }
 
-    await this.pool.query(`
-      INSERT INTO metric_windows (
-        experiment_id,
-        bucket,
-        window_label,
-        p50_ms,
-        p95_ms,
-        error_rate,
-        conversion,
-        completion
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      ON CONFLICT (experiment_id, bucket, window_label)
-      DO UPDATE SET
-        p50_ms = EXCLUDED.p50_ms,
-        p95_ms = EXCLUDED.p95_ms,
-        error_rate = EXCLUDED.error_rate,
-        conversion = EXCLUDED.conversion,
-        completion = EXCLUDED.completion
-    `, [
+    await this.upsertMetricWindow([
       event.experimentId,
       event.bucket,
       event.time,
@@ -171,6 +149,19 @@ export class PostgresStore {
       timeZone: "America/New_York"
     }).format(new Date());
 
+    await this.upsertMetricWindow([
+      experimentId,
+      bucket,
+      windowLabel,
+      rows[0].p50_ms,
+      rows[0].p95_ms,
+      rows[0].error_rate,
+      rows[0].conversion,
+      rows[0].completion
+    ]);
+  }
+
+  async upsertMetricWindow(values) {
     await this.pool.query(`
       INSERT INTO metric_windows (
         experiment_id,
@@ -188,17 +179,9 @@ export class PostgresStore {
         p95_ms = EXCLUDED.p95_ms,
         error_rate = EXCLUDED.error_rate,
         conversion = EXCLUDED.conversion,
-        completion = EXCLUDED.completion
-    `, [
-      experimentId,
-      bucket,
-      windowLabel,
-      rows[0].p50_ms,
-      rows[0].p95_ms,
-      rows[0].error_rate,
-      rows[0].conversion,
-      rows[0].completion
-    ]);
+        completion = EXCLUDED.completion,
+        created_at = now()
+    `, values);
   }
 
   async metricsFor(experimentId) {
@@ -206,7 +189,7 @@ export class PostgresStore {
       SELECT *
       FROM metric_windows
       WHERE experiment_id = $1
-      ORDER BY window_label ASC
+      ORDER BY created_at ASC, window_label ASC
     `, [experimentId]);
     const windows = rows.map(mapMetricWindow);
 
@@ -244,33 +227,7 @@ export class PostgresStore {
   }
 
   async updateIncident(id, patch) {
-    const updates = [];
-    const values = [];
-
-    if (patch.status !== undefined) {
-      values.push(patch.status);
-      updates.push(`status = $${values.length}`);
-    }
-    if (patch.title !== undefined) {
-      values.push(patch.title);
-      updates.push(`title = $${values.length}`);
-    }
-    if (patch.severity !== undefined) {
-      values.push(patch.severity);
-      updates.push(`severity = $${values.length}`);
-    }
-    if (patch.summary !== undefined) {
-      values.push(patch.summary);
-      updates.push(`summary = $${values.length}`);
-    }
-    if (patch.recommendedAction !== undefined) {
-      values.push(patch.recommendedAction);
-      updates.push(`recommended_action = $${values.length}`);
-    }
-    if (patch.mitigatedAt !== undefined) {
-      values.push(patch.mitigatedAt);
-      updates.push(`mitigated_at = $${values.length}`);
-    }
+    const { updates, values } = buildUpdate(patch, INCIDENT_COLUMNS);
 
     if (updates.length) {
       values.push(id);
@@ -468,7 +425,8 @@ function mapMetricWindow(row) {
     p95: Number(row.p95_ms),
     errorRate: Number(row.error_rate),
     conversion: Number(row.conversion),
-    completion: Number(row.completion)
+    completion: Number(row.completion),
+    createdAt: row.created_at.toISOString()
   };
 }
 
@@ -482,4 +440,18 @@ function mapAuditEvent(row) {
     from: row.from_value,
     to: row.to_value
   };
+}
+
+function buildUpdate(patch, columns) {
+  const updates = [];
+  const values = [];
+
+  for (const [key, column] of Object.entries(columns)) {
+    if (patch[key] !== undefined) {
+      values.push(patch[key]);
+      updates.push(`${column} = $${values.length}`);
+    }
+  }
+
+  return { updates, values };
 }

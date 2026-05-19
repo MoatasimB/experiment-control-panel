@@ -34,6 +34,7 @@ export type MetricWindow = {
   errorRate: number;
   conversion: number;
   completion: number;
+  createdAt?: string;
 };
 
 export type MetricSeriesPoint = {
@@ -45,6 +46,7 @@ export type MetricSeriesPoint = {
   treatmentErrors?: number;
   controlConversion?: number;
   treatmentConversion?: number;
+  createdAt?: string;
 };
 
 export type MetricsSummary = {

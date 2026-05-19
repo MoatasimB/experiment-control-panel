@@ -46,10 +46,14 @@ export class Store {
         errorRate: event.statusCode >= 500 ? 100 : 0,
         conversion: event.conversion ? 100 : 0,
         completion: event.completion === false ? 0 : 100,
-        source: "live"
+        source: "live",
+        createdAt: new Date().toISOString()
       });
     } else {
-      this.metricWindows.push(event);
+      this.metricWindows.push({
+        ...event,
+        createdAt: event.createdAt || new Date().toISOString()
+      });
     }
     return event;
   }

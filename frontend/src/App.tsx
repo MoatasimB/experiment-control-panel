@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
+import { drawMetricChart } from "./chart";
+import { calculateDisplayDeltas, getLiveMetrics, healthBadge, healthHeading, isUnhealthy } from "./liveMetrics";
 import type {
   AiAnalysis,
   Assignment,
@@ -8,7 +10,6 @@ import type {
   Experiment,
   Incident,
   MetricSeriesPoint,
-  Regression,
   Trace
 } from "./types";
 
@@ -105,7 +106,7 @@ export function App() {
 
   const { experiment, metrics, regression, incidents, trace, audit } = demo;
   const incident = incidents[0];
-  const liveMetrics = getLiveMetrics(metrics.series, metrics.latest);
+  const liveMetrics = getLiveMetrics(metrics.series);
   const currentControl = liveMetrics.latest.control;
   const currentTreatment = liveMetrics.latest.treatment;
   const displayDeltas = currentControl && currentTreatment
@@ -147,8 +148,10 @@ export function App() {
             controlP95={currentControl?.p95}
             treatmentP95={currentTreatment?.p95}
             errorDelta={displayDeltas?.errorRatePoints}
-            latestWindow={currentTreatment?.time || currentControl?.time}
+            latestWindow={liveMetrics.latestWindow}
             hasLiveMetrics={liveMetrics.hasLiveMetrics}
+            hasComparableLiveMetrics={liveMetrics.hasComparableLiveMetrics}
+            rolloutPercentage={experiment.rolloutPercentage}
           />
         </section>
 
@@ -179,7 +182,9 @@ export function App() {
             hasLiveMetrics={liveMetrics.hasLiveMetrics}
             controlP95={currentControl?.p95}
             treatmentP95={currentTreatment?.p95}
-            latestWindow={currentTreatment?.time || currentControl?.time}
+            latestWindow={liveMetrics.latestWindow}
+            hasComparableLiveMetrics={liveMetrics.hasComparableLiveMetrics}
+            rolloutPercentage={experiment.rolloutPercentage}
           />
           <IncidentPanel
             incident={incident}
@@ -216,23 +221,37 @@ function Sidebar() {
   );
 }
 
-function HealthPanel({ unhealthy, controlP95, treatmentP95, errorDelta, latestWindow, hasLiveMetrics }: {
+function HealthPanel({
+  unhealthy,
+  controlP95,
+  treatmentP95,
+  errorDelta,
+  latestWindow,
+  hasLiveMetrics,
+  hasComparableLiveMetrics,
+  rolloutPercentage
+}: {
   unhealthy: boolean;
   controlP95?: number;
   treatmentP95?: number;
   errorDelta?: number;
   latestWindow?: string;
   hasLiveMetrics: boolean;
+  hasComparableLiveMetrics: boolean;
+  rolloutPercentage: number;
 }) {
+  const heading = healthHeading({ hasLiveMetrics, hasComparableLiveMetrics, unhealthy, rolloutPercentage });
+  const badge = healthBadge({ hasLiveMetrics, hasComparableLiveMetrics, unhealthy, rolloutPercentage });
+
   return (
     <article className="panel health-panel">
       <div className="panel-head">
         <div>
           <p className="eyebrow">Health check</p>
-          <h3>{hasLiveMetrics ? unhealthy ? "Treatment looks unsafe" : "Treatment looks healthy" : "Waiting for live traffic"}</h3>
+          <h3>{heading}</h3>
         </div>
         <span className={`pill ${unhealthy ? "danger" : ""}`}>
-          {hasLiveMetrics ? unhealthy ? "Rollback recommended" : "Continue rollout" : "No live data yet"}
+          {badge}
         </span>
       </div>
       <div className="comparison">
@@ -250,8 +269,12 @@ function HealthPanel({ unhealthy, controlP95, treatmentP95, errorDelta, latestWi
         </div>
       </div>
       <p className="muted">
-        {hasLiveMetrics
+        {hasComparableLiveMetrics
           ? `Latest live target-app window: ${latestWindow}`
+          : hasLiveMetrics && rolloutPercentage === 0
+            ? "Rollout is 0%, so generated traffic is control-only. Raise rollout to compare treatment again."
+            : hasLiveMetrics
+              ? "Live control traffic arrived. Waiting for treatment traffic in the same window."
           : "Run npm run traffic -- 100 to generate live target-app metrics."}
       </p>
     </article>
@@ -394,36 +417,7 @@ function MetricChart({ series }: { series: MetricSeriesPoint[] }) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const width = canvas.width;
-    const height = canvas.height;
-    const pad = 42;
-
-    ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, width, height);
-    ctx.strokeStyle = "#dbe1e8";
-    ctx.lineWidth = 1;
-
-    for (let index = 0; index < 4; index += 1) {
-      const y = pad + ((height - pad * 2) / 3) * index;
-      ctx.beginPath();
-      ctx.moveTo(pad, y);
-      ctx.lineTo(width - pad, y);
-      ctx.stroke();
-    }
-
-    drawLine(ctx, series, "controlP95", "#1c7c54", max, width, height, pad);
-    drawLine(ctx, series, "treatmentP95", "#b42318", max, width, height, pad);
-
-    ctx.fillStyle = "#617080";
-    ctx.font = "13px system-ui";
-    series.forEach((point, index) => {
-      const x = xAt(index, series.length, width, pad);
-      ctx.fillText(point.time, x - 14, height - 12);
-    });
-
-    drawLegend(ctx, "Control p95", "#1c7c54", 64);
-    drawLegend(ctx, "Treatment p95", "#b42318", 178);
+    drawMetricChart(ctx, series, max);
   }, [max, series]);
 
   return (
@@ -451,12 +445,22 @@ function RegressionReasons({ regression, hasLiveMetrics }: { regression: Regress
   );
 }
 
-function LiveEvidencePanel({ unhealthy, hasLiveMetrics, controlP95, treatmentP95, latestWindow }: {
+function LiveEvidencePanel({
+  unhealthy,
+  hasLiveMetrics,
+  hasComparableLiveMetrics,
+  controlP95,
+  treatmentP95,
+  latestWindow,
+  rolloutPercentage
+}: {
   unhealthy: boolean;
   hasLiveMetrics: boolean;
+  hasComparableLiveMetrics: boolean;
   controlP95?: number;
   treatmentP95?: number;
   latestWindow?: string;
+  rolloutPercentage: number;
 }) {
   return (
     <article className="panel">
@@ -466,7 +470,7 @@ function LiveEvidencePanel({ unhealthy, hasLiveMetrics, controlP95, treatmentP95
           <h3>{hasLiveMetrics ? `Latest live window: ${latestWindow}` : "Waiting for target-app traffic"}</h3>
         </div>
         <span className={`pill ${unhealthy ? "danger" : ""}`}>
-          {hasLiveMetrics ? unhealthy ? "Unhealthy" : "Healthy" : "No live data"}
+          {hasComparableLiveMetrics ? unhealthy ? "Unhealthy" : "Healthy" : hasLiveMetrics ? "Control only" : "No live data"}
         </span>
       </div>
       <div className="live-signal">
@@ -480,8 +484,12 @@ function LiveEvidencePanel({ unhealthy, hasLiveMetrics, controlP95, treatmentP95
         </div>
       </div>
       <p className="muted">
-        {hasLiveMetrics
+        {hasComparableLiveMetrics
           ? "This card is based on metric events emitted by the target app."
+          : hasLiveMetrics && rolloutPercentage === 0
+            ? "Rollback is active, so new target-app traffic should only populate the control side."
+            : hasLiveMetrics
+              ? "Live data exists, but treatment has not arrived for the latest live window yet."
           : <>Run <code>npm run traffic -- 100</code>, then watch this card and the chart update.</>}
       </p>
     </article>
@@ -665,53 +673,6 @@ function DetailsSection({ experiments, audit, trace }: {
   );
 }
 
-function drawLine(
-  ctx: CanvasRenderingContext2D,
-  series: MetricSeriesPoint[],
-  key: "controlP95" | "treatmentP95",
-  color: string,
-  max: number,
-  width: number,
-  height: number,
-  pad: number
-) {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  series.forEach((point, index) => {
-    const value = point[key];
-    if (!value) return;
-    const x = xAt(index, series.length, width, pad);
-    const y = height - pad - (value / max) * (height - pad * 2);
-    if (index === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  ctx.stroke();
-
-  ctx.fillStyle = color;
-  series.forEach((point, index) => {
-    const value = point[key];
-    if (!value) return;
-    const x = xAt(index, series.length, width, pad);
-    const y = height - pad - (value / max) * (height - pad * 2);
-    ctx.beginPath();
-    ctx.arc(x, y, 4, 0, Math.PI * 2);
-    ctx.fill();
-  });
-}
-
-function drawLegend(ctx: CanvasRenderingContext2D, label: string, color: string, x: number) {
-  ctx.fillStyle = color;
-  ctx.fillRect(x, 18, 14, 4);
-  ctx.fillStyle = "#17202a";
-  ctx.font = "13px system-ui";
-  ctx.fillText(label, x + 20, 24);
-}
-
-function xAt(index: number, count: number, width: number, pad: number) {
-  return pad + (index / Math.max(1, count - 1)) * (width - pad * 2);
-}
-
 function formatStatus(status: string) {
   return status.replace("_", " ");
 }
@@ -752,32 +713,4 @@ function isSeedTimelineItem(type: string) {
 
 function isSeedAuditEvent(id: string) {
   return id === "aud-1" || id === "aud-2";
-}
-
-function getLiveMetrics(series: MetricSeriesPoint[], latest: Regression["summary"]["latest"]) {
-  const liveTimes = new Set(
-    series
-      .filter((point) => point.source === "live")
-      .map((point) => point.time)
-  );
-
-  const control = latest.control?.source === "live" ? latest.control : null;
-  const treatment = latest.treatment?.source === "live" ? latest.treatment : null;
-
-  return {
-    hasLiveMetrics: liveTimes.size > 0,
-    latest: { control, treatment }
-  };
-}
-
-function calculateDisplayDeltas(control: NonNullable<Regression["summary"]["latest"]["control"]>, treatment: NonNullable<Regression["summary"]["latest"]["treatment"]>) {
-  return {
-    p95Percent: control.p95 === 0 ? 0 : Math.round((((treatment.p95 - control.p95) / control.p95) * 100) * 10) / 10,
-    errorRatePoints: Math.round((treatment.errorRate - control.errorRate) * 10) / 10,
-    conversionPercent: control.conversion === 0 ? 0 : Math.round((((treatment.conversion - control.conversion) / control.conversion) * 100) * 10) / 10
-  };
-}
-
-function isUnhealthy(deltas: { p95Percent: number; errorRatePoints: number; conversionPercent: number }) {
-  return deltas.p95Percent >= 35 || deltas.errorRatePoints >= 1.5 || deltas.conversionPercent <= -8;
 }
