@@ -208,7 +208,24 @@ export class PostgresStore {
       WHERE experiment_id = $1
       ORDER BY window_label ASC
     `, [experimentId]);
-    return rows.map(mapMetricWindow);
+    const windows = rows.map(mapMetricWindow);
+
+    if (!windows.length) return windows;
+
+    const live = await this.pool.query(`
+      SELECT
+        bucket,
+        to_char(created_at AT TIME ZONE 'America/New_York', 'HH24:MI') AS window_label
+      FROM metric_events
+      WHERE experiment_id = $1
+      GROUP BY bucket, window_label
+    `, [experimentId]);
+
+    const liveKeys = new Set(live.rows.map((row) => `${row.bucket}:${row.window_label}`));
+    return windows.map((window) => ({
+      ...window,
+      source: liveKeys.has(`${window.bucket}:${window.time}`) ? "live" : "seed"
+    }));
   }
 
   async listIncidents() {

@@ -86,8 +86,12 @@ export function App() {
 
   const { experiment, metrics, regression, incidents, trace, audit } = demo;
   const incident = incidents[0];
-  const currentControl = metrics.latest.control;
-  const currentTreatment = metrics.latest.treatment;
+  const liveMetrics = getLiveMetrics(metrics.series, metrics.latest);
+  const currentControl = liveMetrics.latest.control;
+  const currentTreatment = liveMetrics.latest.treatment;
+  const displayDeltas = currentControl && currentTreatment
+    ? calculateDisplayDeltas(currentControl, currentTreatment)
+    : null;
 
   return (
     <div className="shell">
@@ -120,17 +124,18 @@ export function App() {
         <section className="grid two">
           <RolloutPanel experiment={experiment} setRollout={setRollout} />
           <HealthPanel
-            regression={regression}
+            unhealthy={Boolean(displayDeltas && isUnhealthy(displayDeltas))}
             controlP95={currentControl?.p95}
             treatmentP95={currentTreatment?.p95}
-            errorDelta={metrics.deltas.errorRatePoints}
+            errorDelta={displayDeltas?.errorRatePoints}
             latestWindow={currentTreatment?.time || currentControl?.time}
+            hasLiveMetrics={liveMetrics.hasLiveMetrics}
           />
         </section>
 
         <section className="grid two">
           <AssignmentPanel userId={userId} setUserId={setUserId} assignment={assignment} />
-          <TargetAppPanel />
+          <TargetAppPanel onTrafficGenerated={load} />
         </section>
 
         <section className="panel" id="metrics">
@@ -140,15 +145,23 @@ export function App() {
               <h3>Control vs treatment</h3>
             </div>
             <span className={`pill ${regression.unhealthy ? "danger" : ""}`}>
-              {regression.unhealthy ? "Regression detected" : "Healthy"}
+              {liveMetrics.hasLiveMetrics
+                ? regression.unhealthy ? "Regression detected" : "Healthy"
+                : "Historical seed data"}
             </span>
           </div>
           <MetricChart series={metrics.series} />
-          <RegressionReasons regression={regression} />
+          <RegressionReasons regression={regression} hasLiveMetrics={liveMetrics.hasLiveMetrics} />
         </section>
 
         <section className="grid two evidence-grid" id="evidence">
-          <LiveEvidencePanel regression={regression} controlP95={currentControl?.p95} treatmentP95={currentTreatment?.p95} />
+          <LiveEvidencePanel
+            unhealthy={Boolean(displayDeltas && isUnhealthy(displayDeltas))}
+            hasLiveMetrics={liveMetrics.hasLiveMetrics}
+            controlP95={currentControl?.p95}
+            treatmentP95={currentTreatment?.p95}
+            latestWindow={currentTreatment?.time || currentControl?.time}
+          />
           <IncidentPanel incident={incident} rollback={rollback} />
         </section>
 
@@ -178,22 +191,23 @@ function Sidebar() {
   );
 }
 
-function HealthPanel({ regression, controlP95, treatmentP95, errorDelta, latestWindow }: {
-  regression: Regression;
+function HealthPanel({ unhealthy, controlP95, treatmentP95, errorDelta, latestWindow, hasLiveMetrics }: {
+  unhealthy: boolean;
   controlP95?: number;
   treatmentP95?: number;
-  errorDelta: number;
+  errorDelta?: number;
   latestWindow?: string;
+  hasLiveMetrics: boolean;
 }) {
   return (
     <article className="panel health-panel">
       <div className="panel-head">
         <div>
           <p className="eyebrow">Health check</p>
-          <h3>{regression.unhealthy ? "Treatment looks unsafe" : "Treatment looks healthy"}</h3>
+          <h3>{hasLiveMetrics ? unhealthy ? "Treatment looks unsafe" : "Treatment looks healthy" : "Waiting for live traffic"}</h3>
         </div>
-        <span className={`pill ${regression.unhealthy ? "danger" : ""}`}>
-          {regression.unhealthy ? "Rollback recommended" : "Continue rollout"}
+        <span className={`pill ${unhealthy ? "danger" : ""}`}>
+          {hasLiveMetrics ? unhealthy ? "Rollback recommended" : "Continue rollout" : "No live data yet"}
         </span>
       </div>
       <div className="comparison">
@@ -207,10 +221,14 @@ function HealthPanel({ regression, controlP95, treatmentP95, errorDelta, latestW
         </div>
         <div>
           <span>Error delta</span>
-          <strong>{formatDelta(errorDelta)}</strong>
+          <strong>{errorDelta === undefined ? "--" : formatDelta(errorDelta)}</strong>
         </div>
       </div>
-      <p className="muted">Latest metric window: {latestWindow || "waiting for target app traffic"}</p>
+      <p className="muted">
+        {hasLiveMetrics
+          ? `Latest live target-app window: ${latestWindow}`
+          : "Run npm run traffic -- 100 to generate live target-app metrics."}
+      </p>
     </article>
   );
 }
@@ -246,7 +264,36 @@ function AssignmentPanel({ userId, setUserId, assignment }: {
   );
 }
 
-function TargetAppPanel() {
+function TargetAppPanel({ onTrafficGenerated }: { onTrafficGenerated: () => Promise<void> }) {
+  const [generating, setGenerating] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function generateTraffic() {
+    try {
+      setGenerating(true);
+      setMessage(null);
+      const response = await fetch("http://127.0.0.1:4180/traffic", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ count: 100 })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Target app returned ${response.status}`);
+      }
+
+      const result = await response.json();
+      setMessage(`Generated ${result.generated} requests with ${result.failures} failures.`);
+      await onTrafficGenerated();
+    } catch (error) {
+      setMessage(error instanceof Error
+        ? `${error.message}. Make sure npm run dev:target is running.`
+        : "Could not generate target-app traffic.");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   return (
     <article className="panel">
       <div className="panel-head">
@@ -261,6 +308,12 @@ function TargetAppPanel() {
       <div className="command-box">
         <span>Generate local traffic</span>
         <code>npm run traffic -- 100</code>
+      </div>
+      <div className="button-row traffic-actions">
+        <button onClick={generateTraffic} disabled={generating}>
+          {generating ? "Generating..." : "Generate 100 requests"}
+        </button>
+        {message ? <small className="muted">{message}</small> : null}
       </div>
     </article>
   );
@@ -355,7 +408,15 @@ function MetricChart({ series }: { series: MetricSeriesPoint[] }) {
   );
 }
 
-function RegressionReasons({ regression }: { regression: Regression }) {
+function RegressionReasons({ regression, hasLiveMetrics }: { regression: Regression; hasLiveMetrics: boolean }) {
+  if (!hasLiveMetrics) {
+    return (
+      <div className="reasons">
+        <div className="reason neutral">Chart starts with historical seed data. Run <code>npm run traffic -- 100</code> to add live target-app metrics.</div>
+      </div>
+    );
+  }
+
   return (
     <div className="reasons">
       {(regression.reasons.length ? regression.reasons : ["No regression detected in the latest metric window."]).map((reason) => (
@@ -365,22 +426,22 @@ function RegressionReasons({ regression }: { regression: Regression }) {
   );
 }
 
-function LiveEvidencePanel({ regression, controlP95, treatmentP95 }: {
-  regression: Regression;
+function LiveEvidencePanel({ unhealthy, hasLiveMetrics, controlP95, treatmentP95, latestWindow }: {
+  unhealthy: boolean;
+  hasLiveMetrics: boolean;
   controlP95?: number;
   treatmentP95?: number;
+  latestWindow?: string;
 }) {
-  const latest = regression.summary.latest.treatment || regression.summary.latest.control;
-
   return (
     <article className="panel">
       <div className="panel-head">
         <div>
           <p className="eyebrow">Live target app signal</p>
-          <h3>{latest ? `Latest window: ${latest.time}` : "Waiting for traffic"}</h3>
+          <h3>{hasLiveMetrics ? `Latest live window: ${latestWindow}` : "Waiting for target-app traffic"}</h3>
         </div>
-        <span className={`pill ${regression.unhealthy ? "danger" : ""}`}>
-          {regression.unhealthy ? "Unhealthy" : "Healthy"}
+        <span className={`pill ${unhealthy ? "danger" : ""}`}>
+          {hasLiveMetrics ? unhealthy ? "Unhealthy" : "Healthy" : "No live data"}
         </span>
       </div>
       <div className="live-signal">
@@ -394,7 +455,9 @@ function LiveEvidencePanel({ regression, controlP95, treatmentP95 }: {
         </div>
       </div>
       <p className="muted">
-        This card updates from metric events emitted by the target app. Run <code>npm run traffic -- 100</code>, then watch this section and the chart refresh.
+        {hasLiveMetrics
+          ? "This card is based on metric events emitted by the target app."
+          : <>Run <code>npm run traffic -- 100</code>, then watch this card and the chart update.</>}
       </p>
     </article>
   );
@@ -598,4 +661,32 @@ function formatMs(value?: number) {
 
 function formatDelta(value: number) {
   return `${value >= 0 ? "+" : ""}${Math.round(value * 10) / 10}`;
+}
+
+function getLiveMetrics(series: MetricSeriesPoint[], latest: Regression["summary"]["latest"]) {
+  const liveTimes = new Set(
+    series
+      .filter((point) => point.source === "live")
+      .map((point) => point.time)
+  );
+
+  const control = latest.control?.source === "live" ? latest.control : null;
+  const treatment = latest.treatment?.source === "live" ? latest.treatment : null;
+
+  return {
+    hasLiveMetrics: liveTimes.size > 0,
+    latest: { control, treatment }
+  };
+}
+
+function calculateDisplayDeltas(control: NonNullable<Regression["summary"]["latest"]["control"]>, treatment: NonNullable<Regression["summary"]["latest"]["treatment"]>) {
+  return {
+    p95Percent: control.p95 === 0 ? 0 : Math.round((((treatment.p95 - control.p95) / control.p95) * 100) * 10) / 10,
+    errorRatePoints: Math.round((treatment.errorRate - control.errorRate) * 10) / 10,
+    conversionPercent: control.conversion === 0 ? 0 : Math.round((((treatment.conversion - control.conversion) / control.conversion) * 100) * 10) / 10
+  };
+}
+
+function isUnhealthy(deltas: { p95Percent: number; errorRatePoints: number; conversionPercent: number }) {
+  return deltas.p95Percent >= 35 || deltas.errorRatePoints >= 1.5 || deltas.conversionPercent <= -8;
 }

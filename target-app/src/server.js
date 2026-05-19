@@ -10,6 +10,17 @@ const releaseSha = process.env.RELEASE_SHA || "local-ranking-v2";
 
 const app = express();
 
+app.use((req, res, next) => {
+  res.setHeader("access-control-allow-origin", "*");
+  res.setHeader("access-control-allow-methods", "GET,POST,OPTIONS");
+  res.setHeader("access-control-allow-headers", "content-type");
+  if (req.method === "OPTIONS") {
+    res.sendStatus(204);
+    return;
+  }
+  next();
+});
+
 app.use(express.json({ limit: "1mb" }));
 
 app.get("/health", (_req, res) => {

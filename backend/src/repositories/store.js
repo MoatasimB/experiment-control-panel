@@ -45,7 +45,8 @@ export class Store {
         p95: event.durationMs,
         errorRate: event.statusCode >= 500 ? 100 : 0,
         conversion: event.conversion ? 100 : 0,
-        completion: event.completion === false ? 0 : 100
+        completion: event.completion === false ? 0 : 100,
+        source: "live"
       });
     } else {
       this.metricWindows.push(event);

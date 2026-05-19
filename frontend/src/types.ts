@@ -27,6 +27,7 @@ export type Experiment = {
 export type MetricWindow = {
   experimentId: string;
   bucket: "control" | "treatment";
+  source?: "seed" | "live";
   time: string;
   p50: number;
   p95: number;
@@ -37,6 +38,7 @@ export type MetricWindow = {
 
 export type MetricSeriesPoint = {
   time: string;
+  source?: "seed" | "live";
   controlP95?: number;
   treatmentP95?: number;
   controlErrors?: number;

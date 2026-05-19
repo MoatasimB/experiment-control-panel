@@ -12,6 +12,7 @@ export function summarizeMetrics(metricWindows) {
     row[`${metric.bucket}P95`] = metric.p95;
     row[`${metric.bucket}Errors`] = metric.errorRate;
     row[`${metric.bucket}Conversion`] = metric.conversion;
+    if (metric.source === "live") row.source = "live";
     result.set(metric.time, row);
     return result;
   }, new Map());
