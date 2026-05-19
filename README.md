@@ -1,10 +1,10 @@
-# Experiment Reliability Control Plane
+# Experiment Reliability Control Panel
 
 A full-stack internal engineering tool for managing staged rollouts, A/B experiments, reliability regressions, traces, incidents, and rollback workflows.
 
-Plain-English version: your team has an app, you built a new feature, and you do not want to give it to every user at once. This control plane lets you give the feature to a percentage of users, compare the new version against the old version, and roll back to the old version if the new feature causes problems.
+Your team has an app, you built a new feature, and you do not want to give it to every user at once. This control panel lets you give the feature to a percentage of users, compare the new version against the old version, and roll back to the old version if the new feature causes problems.
 
-This repo includes a small target search app so the control plane can be demoed locally. The target app simulates the project your team is deploying.
+This repo includes a small target search app so the control panel can be demoed locally. The target app simulates the project your team is deploying.
 
 ## How It Works
 
@@ -61,7 +61,7 @@ Request body:
 }
 ```
 
-This project is stronger than a generic dashboard because it demonstrates:
+This project demonstrates:
 
 - deterministic user bucketing and rollout control
 - metrics ingestion, aggregation, and baseline comparison
