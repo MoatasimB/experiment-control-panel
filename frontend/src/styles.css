@@ -404,6 +404,24 @@ canvas {
   font-weight: 800;
 }
 
+.timeline-item em {
+  color: var(--muted);
+  display: inline-block;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 750;
+  margin-left: 8px;
+}
+
+.seeded-item {
+  opacity: 0.72;
+}
+
+.live-item {
+  border-color: #b7dbc7;
+  background: #f4fbf7;
+}
+
 .span {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 90px 80px;

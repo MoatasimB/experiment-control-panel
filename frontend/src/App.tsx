@@ -479,9 +479,14 @@ function IncidentPanel({ incident, rollback }: {
       <p className="muted">{incident.severity} - {incident.status} - {incident.summary}</p>
       <div className="timeline">
         {incident.timeline.map((item) => (
-          <div className="timeline-item" key={`${item.time}-${item.type}-${item.text}`}>
+          <div className={`timeline-item ${isSeedTimelineItem(item.type) ? "seeded-item" : "live-item"}`} key={`${item.time}-${item.type}-${item.text}`}>
             <span>{item.time}</span>
-            <div><strong>{item.type}</strong><br />{item.text}</div>
+            <div>
+              <strong>{item.type}</strong>
+              <em>{isSeedTimelineItem(item.type) ? "seeded demo evidence" : "live action"}</em>
+              <br />
+              {item.text}
+            </div>
           </div>
         ))}
       </div>
@@ -514,14 +519,23 @@ function TracePanel({ trace }: { trace: Trace }) {
 }
 
 function AuditPanel({ audit }: { audit: AuditEvent[] }) {
+  const liveEvents = audit.filter((event) => !isSeedAuditEvent(event.id));
+  const seedEvents = audit.filter((event) => isSeedAuditEvent(event.id));
+  const visibleAudit = [...liveEvents, ...seedEvents];
+
   return (
     <section>
       <div className="panel-head">
         <div>
           <p className="eyebrow">Audit log</p>
-          <h3>Production changes</h3>
+          <h3>{liveEvents.length ? "Live changes and seed history" : "Seed history"}</h3>
         </div>
       </div>
+      <p className="muted">
+        {liveEvents.length
+          ? "New rollout and rollback actions appear first. Seeded entries are kept for demo context."
+          : "No live rollout or rollback actions yet. Use rollout controls or rollback to create live audit entries."}
+      </p>
       <div className="table-wrap">
         <table>
           <thead>
@@ -533,8 +547,8 @@ function AuditPanel({ audit }: { audit: AuditEvent[] }) {
             </tr>
           </thead>
           <tbody>
-            {audit.map((event) => (
-              <tr key={event.id}>
+            {visibleAudit.map((event) => (
+              <tr className={isSeedAuditEvent(event.id) ? "seeded-item" : "live-item"} key={event.id}>
                 <td>{formatTime(event.time)}</td>
                 <td>{event.actor}</td>
                 <td>{event.action}</td>
@@ -661,6 +675,14 @@ function formatMs(value?: number) {
 
 function formatDelta(value: number) {
   return `${value >= 0 ? "+" : ""}${Math.round(value * 10) / 10}`;
+}
+
+function isSeedTimelineItem(type: string) {
+  return type !== "rollback";
+}
+
+function isSeedAuditEvent(id: string) {
+  return id === "aud-1" || id === "aud-2";
 }
 
 function getLiveMetrics(series: MetricSeriesPoint[], latest: Regression["summary"]["latest"]) {
