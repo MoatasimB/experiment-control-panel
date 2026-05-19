@@ -95,8 +95,12 @@ export function App() {
     }
   }
 
-  if (loading || !demo) {
+  if (loading) {
     return <div className="loading">Loading reliability control plane...</div>;
+  }
+
+  if (!demo) {
+    return <div className="loading">{error || "No dashboard data available."}</div>;
   }
 
   const { experiment, metrics, regression, incidents, trace, audit } = demo;
@@ -484,7 +488,7 @@ function LiveEvidencePanel({ unhealthy, hasLiveMetrics, controlP95, treatmentP95
   );
 }
 
-function IncidentPanel({ incident, rollback }: {
+function IncidentPanel({ incident, rollback, analyzeIncident, analyzing, aiAnalysis }: {
   incident: Incident;
   rollback: () => Promise<void>;
   analyzeIncident: () => Promise<void>;
