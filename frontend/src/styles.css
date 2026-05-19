@@ -422,6 +422,31 @@ canvas {
   background: #f4fbf7;
 }
 
+.ai-panel {
+  border: 1px solid #cfe2dc;
+  border-radius: 8px;
+  background: #f7fbfa;
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px;
+}
+
+.ai-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ai-columns ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.ai-columns li {
+  margin-bottom: 6px;
+}
+
 .span {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 90px 80px;
@@ -515,7 +540,8 @@ th {
   }
 
   .span,
-  .timeline-item {
+  .timeline-item,
+  .ai-columns {
     grid-template-columns: 1fr;
   }
 }

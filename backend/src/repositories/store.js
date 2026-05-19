@@ -81,6 +81,10 @@ export class Store {
     return [...this.auditEvents].sort((a, b) => b.time.localeCompare(a.time));
   }
 
+  listRecentMetricEvents() {
+    return [];
+  }
+
   addAuditEvent(event) {
     this.auditEvents.push({
       id: `aud-${this.auditEvents.length + 1}`,

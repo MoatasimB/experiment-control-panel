@@ -125,3 +125,17 @@ export type Assignment = {
   included: boolean;
   variant: "control" | "treatment";
 };
+
+export type AiAnalysis = {
+  model: string;
+  generatedAt: string;
+  source: "openai" | "local";
+  recommendation: "rollback" | "pause_rollout" | "continue_monitoring" | "increase_rollout";
+  confidence: string;
+  suspectedCause: string;
+  summary: string;
+  evidence: string[];
+  risks: string[];
+  nextSteps: string[];
+  aiError?: string;
+};

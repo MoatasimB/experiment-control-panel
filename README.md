@@ -66,6 +66,7 @@ This project demonstrates:
 - deterministic user bucketing and rollout control
 - metrics ingestion, aggregation, and baseline comparison
 - automated regression detection
+- optional AI incident advisor for rollback recommendations
 - trace-driven debugging
 - incident timeline and rollback workflow
 - auditability around production changes
@@ -131,6 +132,17 @@ http://127.0.0.1:4180/search?user_id=user-90210&q=nyc%20pizza
 ```
 
 The target app asks the control plane for a control/treatment assignment, simulates search latency and errors, then posts a metric event back to `POST /api/metrics/events`.
+
+## Optional AI Advisor
+
+The incident panel includes an **Analyze with AI** button. Set `OPENAI_API_KEY` in `.env` to call the OpenAI Responses API. Without a key, the app uses a local heuristic fallback so the demo still works.
+
+```env
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-5-mini
+```
+
+The advisor reviews the incident, live metrics, recent failed target-app events, trace evidence, and audit history. It returns a recommendation such as `rollback` or `continue_monitoring`; it does not automatically execute rollback.
 
 ## Test
 
@@ -219,6 +231,7 @@ tests/
 - `POST /api/metrics/events`
 - `GET /api/metrics/summary?experiment_id=ranking-v2`
 - `GET /api/incidents`
+- `POST /api/incidents/:id/ai-analysis`
 - `POST /api/incidents/:id/rollback`
 - `GET /api/audit`
 - `GET /api/traces/:trace_id`

@@ -1,4 +1,4 @@
-import type { Assignment, DemoPayload, Experiment, Incident } from "./types";
+import type { AiAnalysis, Assignment, DemoPayload, Experiment, Incident } from "./types";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api${path}`, {
@@ -31,5 +31,9 @@ export const api = {
   rollback: (incidentId: string, actor: string) => request<{ incident: Incident; experiment: Experiment }>(`/incidents/${incidentId}/rollback`, {
     method: "POST",
     body: JSON.stringify({ actor })
+  }),
+  analyzeIncident: (incidentId: string) => request<AiAnalysis>(`/incidents/${incidentId}/ai-analysis`, {
+    method: "POST",
+    body: JSON.stringify({})
   })
 };

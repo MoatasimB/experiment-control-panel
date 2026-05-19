@@ -323,6 +323,32 @@ export class PostgresStore {
     return rows.map(mapAuditEvent);
   }
 
+  async listRecentMetricEvents(experimentId, limit = 25) {
+    const { rows } = await this.pool.query(`
+      SELECT *
+      FROM metric_events
+      WHERE experiment_id = $1
+      ORDER BY created_at DESC
+      LIMIT $2
+    `, [experimentId, limit]);
+
+    return rows.map((row) => ({
+      id: row.id,
+      experimentId: row.experiment_id,
+      bucket: row.bucket,
+      userId: row.user_id,
+      service: row.service,
+      route: row.route,
+      statusCode: Number(row.status_code),
+      durationMs: Number(row.duration_ms),
+      conversion: row.conversion,
+      completion: row.completion,
+      traceId: row.trace_id,
+      releaseSha: row.release_sha,
+      createdAt: row.created_at.toISOString()
+    }));
+  }
+
   async addAuditEvent(event) {
     const { rows } = await this.pool.query("SELECT COUNT(*)::int AS count FROM audit_events");
     const id = `aud-${rows[0].count + 1}`;

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import type {
+  AiAnalysis,
   Assignment,
   AuditEvent,
   DemoPayload,
@@ -22,6 +23,8 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
+  const [aiAnalysis, setAiAnalysis] = useState<AiAnalysis | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
 
   async function load() {
     try {
@@ -78,6 +81,18 @@ export function App() {
   async function rollback() {
     await api.rollback("inc-1042", ACTOR);
     await load();
+  }
+
+  async function analyzeIncident() {
+    try {
+      setAnalyzing(true);
+      setError(null);
+      setAiAnalysis(await api.analyzeIncident("inc-1042"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "AI analysis failed");
+    } finally {
+      setAnalyzing(false);
+    }
   }
 
   if (loading || !demo) {
@@ -162,7 +177,13 @@ export function App() {
             treatmentP95={currentTreatment?.p95}
             latestWindow={currentTreatment?.time || currentControl?.time}
           />
-          <IncidentPanel incident={incident} rollback={rollback} />
+          <IncidentPanel
+            incident={incident}
+            rollback={rollback}
+            analyzeIncident={analyzeIncident}
+            analyzing={analyzing}
+            aiAnalysis={aiAnalysis}
+          />
         </section>
 
         <DetailsSection experiments={experiments} audit={audit} trace={trace} />
@@ -466,6 +487,9 @@ function LiveEvidencePanel({ unhealthy, hasLiveMetrics, controlP95, treatmentP95
 function IncidentPanel({ incident, rollback }: {
   incident: Incident;
   rollback: () => Promise<void>;
+  analyzeIncident: () => Promise<void>;
+  analyzing: boolean;
+  aiAnalysis: AiAnalysis | null;
 }) {
   return (
     <article className="panel" id="incident">
@@ -474,9 +498,15 @@ function IncidentPanel({ incident, rollback }: {
           <p className="eyebrow">Incident</p>
           <h3>{incident.title}</h3>
         </div>
-        <button onClick={rollback}>Rollback</button>
+        <div className="hero-actions">
+          <button className="secondary" onClick={analyzeIncident} disabled={analyzing}>
+            {analyzing ? "Analyzing..." : "Analyze with AI"}
+          </button>
+          <button onClick={rollback}>Rollback</button>
+        </div>
       </div>
       <p className="muted">{incident.severity} - {incident.status} - {incident.summary}</p>
+      {aiAnalysis ? <AiAnalysisPanel analysis={aiAnalysis} /> : null}
       <div className="timeline">
         {incident.timeline.map((item) => (
           <div className={`timeline-item ${isSeedTimelineItem(item.type) ? "seeded-item" : "live-item"}`} key={`${item.time}-${item.type}-${item.text}`}>
@@ -491,6 +521,37 @@ function IncidentPanel({ incident, rollback }: {
         ))}
       </div>
     </article>
+  );
+}
+
+function AiAnalysisPanel({ analysis }: { analysis: AiAnalysis }) {
+  return (
+    <div className="ai-panel">
+      <div className="panel-head">
+        <div>
+          <p className="eyebrow">{analysis.source === "openai" ? "AI incident advisor" : "Local advisor fallback"}</p>
+          <h3>{formatRecommendation(analysis.recommendation)} · {analysis.confidence} confidence</h3>
+        </div>
+        <span className={`pill ${analysis.recommendation === "rollback" ? "danger" : ""}`}>{analysis.model}</span>
+      </div>
+      <p>{analysis.summary}</p>
+      <p className="muted"><strong>Likely cause:</strong> {analysis.suspectedCause}</p>
+      {analysis.aiError ? <p className="muted"><strong>AI error:</strong> {analysis.aiError}</p> : null}
+      <div className="ai-columns">
+        <div>
+          <strong>Evidence</strong>
+          <ul>
+            {analysis.evidence.map((item) => <li key={item}>{item}</li>)}
+          </ul>
+        </div>
+        <div>
+          <strong>Next steps</strong>
+          <ul>
+            {analysis.nextSteps.map((item) => <li key={item}>{item}</li>)}
+          </ul>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -675,6 +736,10 @@ function formatMs(value?: number) {
 
 function formatDelta(value: number) {
   return `${value >= 0 ? "+" : ""}${Math.round(value * 10) / 10}`;
+}
+
+function formatRecommendation(value: string) {
+  return value.replace("_", " ");
 }
 
 function isSeedTimelineItem(type: string) {

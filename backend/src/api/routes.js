@@ -3,6 +3,7 @@ import { assignUser } from "../services/bucketing.js";
 import { detectRegression } from "../services/regression.js";
 import { summarizeMetrics } from "../services/metrics.js";
 import { rollbackIncident, updateRollout } from "../services/rollout.js";
+import { analyzeIncidentWithAi } from "../services/aiIncidentAnalysis.js";
 
 export function createApiRouter(store) {
   const router = express.Router();
@@ -71,6 +72,15 @@ export function createApiRouter(store) {
 
   router.post("/incidents/:id/rollback", asyncHandler(async (req, res) => {
     const result = await rollbackIncident(store, req.params.id, req.body.actor);
+    if (!result) {
+      res.status(404).json({ error: "Incident not found" });
+      return;
+    }
+    res.json(result);
+  }));
+
+  router.post("/incidents/:id/ai-analysis", asyncHandler(async (req, res) => {
+    const result = await analyzeIncidentWithAi(store, req.params.id);
     if (!result) {
       res.status(404).json({ error: "Incident not found" });
       return;
