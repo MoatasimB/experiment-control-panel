@@ -2,9 +2,66 @@
 
 A full-stack internal engineering tool for managing staged rollouts, A/B experiments, reliability regressions, traces, incidents, and rollback workflows.
 
-This project is intentionally scoped around one polished demo story: a ranking experiment moves from 10% to 50%, treatment latency and error rate spike, the detector opens an incident, traces reveal a downstream dependency issue, and rollback recovers the system.
+Plain-English version: your team has an app, you built a new feature, and you do not want to give it to every user at once. This control plane lets you give the feature to a percentage of users, compare the new version against the old version, and roll back to the old version if the new feature causes problems.
 
-The project is stronger than a generic dashboard because it demonstrates:
+This repo includes a small target search app so the control plane can be demoed locally. The target app simulates the project your team is deploying.
+
+## How It Works
+
+```text
+User calls target app
+  -> target app asks control plane: control or treatment?
+  -> control = old feature behavior
+  -> treatment = new feature behavior
+  -> target app reports latency/error metrics back
+  -> dashboard compares old vs new
+  -> rollback sets treatment exposure to 0%
+```
+
+The important idea is that the target app does not decide rollout rules by itself. It asks the control plane for an assignment and reports what happened.
+
+To connect another app to this project, that app needs to do two things:
+
+1. Ask for assignment before serving the feature:
+
+```http
+POST /api/assignments
+```
+
+Request body:
+
+```json
+{
+  "experimentId": "ranking-v2",
+  "userId": "user-123"
+}
+```
+
+2. Report a metric event after serving the request:
+
+```http
+POST /api/metrics/events
+```
+
+Request body:
+
+```json
+{
+  "experimentId": "ranking-v2",
+  "bucket": "treatment",
+  "userId": "user-123",
+  "service": "target-search",
+  "route": "/search",
+  "statusCode": 503,
+  "durationMs": 780,
+  "conversion": false,
+  "completion": false,
+  "traceId": "trg-123",
+  "releaseSha": "local-ranking-v2"
+}
+```
+
+This project is stronger than a generic dashboard because it demonstrates:
 
 - deterministic user bucketing and rollout control
 - metrics ingestion, aggregation, and baseline comparison

@@ -76,6 +76,8 @@ export function App() {
 
   const { experiment, metrics, regression, incidents, trace, audit } = demo;
   const incident = incidents[0];
+  const currentControl = metrics.latest.control;
+  const currentTreatment = metrics.latest.treatment;
 
   return (
     <div className="shell">
@@ -84,8 +86,8 @@ export function App() {
       <main>
         <header className="topbar">
           <div>
-            <p className="eyebrow">NYC production rollout</p>
-            <h1>Experiment & Reliability Control Plane</h1>
+            <p className="eyebrow">Release safety dashboard</p>
+            <h1>Search Ranking V2 rollout</h1>
           </div>
           <div className="operator">Operator: <strong>{ACTOR}</strong></div>
         </header>
@@ -94,35 +96,32 @@ export function App() {
 
         <section className="hero" id="dashboard">
           <div>
-            <p className="eyebrow">Active demo scenario</p>
-            <h2>{experiment.name}</h2>
-            <p>{experiment.description}</p>
+            <p className="eyebrow">What is happening</p>
+            <h2>{experiment.rolloutPercentage}% of users can see the new ranking feature.</h2>
+            <p>Control users get the old search behavior. Treatment users get the new ranking model from the target app. This page compares the two groups and lets you roll back if treatment looks unhealthy.</p>
           </div>
           <div className="hero-actions">
-            <button onClick={rollback}>Trigger rollback</button>
+            <button onClick={rollback}>Rollback to old version</button>
             <button className="secondary" onClick={load}>Refresh</button>
           </div>
         </section>
 
-        <section className="kpi-grid">
-          <Kpi label="Rollout" value={`${experiment.rolloutPercentage}%`} detail={`Previous: ${experiment.previousRolloutPercentage}%`} />
-          <Kpi danger label="p95 delta" value={`${metrics.deltas.p95Percent}%`} detail="Treatment vs control" />
-          <Kpi danger label="Error delta" value={`+${metrics.deltas.errorRatePoints}`} detail="Percentage points" />
-          <Kpi label="Conversion delta" value={`${metrics.deltas.conversionPercent}%`} detail="Product outcome" />
+        <section className="grid two">
+          <RolloutPanel experiment={experiment} setRollout={setRollout} />
+          <HealthPanel
+            regression={regression}
+            controlP95={currentControl?.p95}
+            treatmentP95={currentTreatment?.p95}
+            errorDelta={metrics.deltas.errorRatePoints}
+          />
         </section>
 
         <section className="grid two">
-          <ExperimentPanel
-            experiments={experiments}
-            userId={userId}
-            setUserId={setUserId}
-            assignment={assignment}
-          />
-
-          <RolloutPanel experiment={experiment} setRollout={setRollout} />
+          <AssignmentPanel userId={userId} setUserId={setUserId} assignment={assignment} />
+          <TargetAppPanel />
         </section>
 
-        <section className="panel">
+        <section className="panel" id="metrics">
           <div className="panel-head">
             <div>
               <p className="eyebrow">Metrics</p>
@@ -136,12 +135,12 @@ export function App() {
           <RegressionReasons regression={regression} />
         </section>
 
-        <section className="grid two">
+        <section className="grid two evidence-grid" id="evidence">
           <IncidentPanel incident={incident} rollback={rollback} />
           <TracePanel trace={trace} />
         </section>
 
-        <AuditPanel audit={audit} />
+        <DetailsSection experiments={experiments} audit={audit} />
       </main>
     </div>
   );
@@ -158,63 +157,67 @@ function Sidebar() {
         </div>
       </div>
       <nav>
-        <a href="#dashboard" className="active">Dashboard</a>
-        <a href="#experiments">Experiments</a>
+        <a href="#dashboard" className="active">Overview</a>
         <a href="#rollout">Rollout</a>
-        <a href="#incident">Incident</a>
-        <a href="#trace">Trace</a>
-        <a href="#audit">Audit</a>
+        <a href="#metrics">Metrics</a>
+        <a href="#evidence">Evidence</a>
       </nav>
     </aside>
   );
 }
 
-function Kpi({ label, value, detail, danger = false }: {
-  label: string;
-  value: string;
-  detail: string;
-  danger?: boolean;
+function HealthPanel({ regression, controlP95, treatmentP95, errorDelta }: {
+  regression: Regression;
+  controlP95?: number;
+  treatmentP95?: number;
+  errorDelta: number;
 }) {
   return (
-    <article className={`kpi ${danger ? "danger" : ""}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{detail}</small>
+    <article className="panel health-panel">
+      <div className="panel-head">
+        <div>
+          <p className="eyebrow">Health check</p>
+          <h3>{regression.unhealthy ? "Treatment looks unsafe" : "Treatment looks healthy"}</h3>
+        </div>
+        <span className={`pill ${regression.unhealthy ? "danger" : ""}`}>
+          {regression.unhealthy ? "Rollback recommended" : "Continue rollout"}
+        </span>
+      </div>
+      <div className="comparison">
+        <div>
+          <span>Old version p95</span>
+          <strong>{controlP95 ?? "--"}ms</strong>
+        </div>
+        <div>
+          <span>New version p95</span>
+          <strong>{treatmentP95 ?? "--"}ms</strong>
+        </div>
+        <div>
+          <span>Error delta</span>
+          <strong>+{errorDelta}</strong>
+        </div>
+      </div>
     </article>
   );
 }
 
-function ExperimentPanel({ experiments, userId, setUserId, assignment }: {
-  experiments: Experiment[];
+function AssignmentPanel({ userId, setUserId, assignment }: {
   userId: string;
   setUserId: (userId: string) => void;
   assignment: Assignment | null;
 }) {
   return (
-    <article className="panel" id="experiments">
+    <article className="panel">
       <div className="panel-head">
         <div>
-          <p className="eyebrow">Experiments</p>
-          <h3>Release health</h3>
+          <p className="eyebrow">User assignment</p>
+          <h3>Who gets the new feature?</h3>
         </div>
         <input
           value={userId}
           aria-label="User id for assignment"
           onChange={(event) => setUserId(event.target.value)}
         />
-      </div>
-      <div className="experiment-list">
-        {experiments.map((experiment) => (
-          <div className="experiment" key={experiment.id}>
-            <div>
-              <strong>{experiment.name}</strong>
-              <small>{experiment.owner} - {experiment.targeting.regions.join(", ")}</small>
-            </div>
-            <span className={`pill ${experiment.status === "degraded" ? "danger" : ""}`}>
-              {formatStatus(experiment.status)}
-            </span>
-          </div>
-        ))}
       </div>
       <div className="assignment">
         {assignment ? (
@@ -224,6 +227,26 @@ function ExperimentPanel({ experiments, userId, setUserId, assignment }: {
             <small>Stable bucket {assignment.bucketNumber}; included={String(assignment.included)}</small>
           </>
         ) : "Calculating assignment..."}
+      </div>
+    </article>
+  );
+}
+
+function TargetAppPanel() {
+  return (
+    <article className="panel">
+      <div className="panel-head">
+        <div>
+          <p className="eyebrow">Target app</p>
+          <h3>The app being rolled out</h3>
+        </div>
+      </div>
+      <p className="muted">
+        The target search app asks this control plane who should see the new feature, serves old or new behavior, then reports latency and errors back as metric events.
+      </p>
+      <div className="command-box">
+        <span>Generate local traffic</span>
+        <code>npm run traffic -- 100</code>
       </div>
     </article>
   );
@@ -380,7 +403,7 @@ function TracePanel({ trace }: { trace: Trace }) {
 
 function AuditPanel({ audit }: { audit: AuditEvent[] }) {
   return (
-    <section className="panel" id="audit">
+    <section>
       <div className="panel-head">
         <div>
           <p className="eyebrow">Audit log</p>
@@ -409,6 +432,42 @@ function AuditPanel({ audit }: { audit: AuditEvent[] }) {
           </tbody>
         </table>
       </div>
+    </section>
+  );
+}
+
+function DetailsSection({ experiments, audit }: {
+  experiments: Experiment[];
+  audit: AuditEvent[];
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <section className="panel compact-details">
+      <button className="secondary" onClick={() => setOpen((value) => !value)}>
+        {open ? "Hide details" : "Show experiments and audit log"}
+      </button>
+      {open ? (
+        <div className="details-grid">
+          <div>
+            <h3>Experiments</h3>
+            <div className="experiment-list">
+              {experiments.map((experiment) => (
+                <div className="experiment" key={experiment.id}>
+                  <div>
+                    <strong>{experiment.name}</strong>
+                    <small>{experiment.owner} - {experiment.targeting.regions.join(", ")}</small>
+                  </div>
+                  <span className={`pill ${experiment.status === "degraded" ? "danger" : ""}`}>
+                    {formatStatus(experiment.status)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <AuditPanel audit={audit} />
+        </div>
+      ) : null}
     </section>
   );
 }
