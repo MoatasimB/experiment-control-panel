@@ -190,8 +190,15 @@ h3 {
 
 .hero-actions {
   display: flex;
+  align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.refresh-note {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .kpi-grid {
@@ -230,19 +237,22 @@ h3 {
 
 .comparison {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
   gap: 12px;
 }
 
 .comparison div,
+.live-signal div,
 .command-box {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fbfcfd;
   padding: 14px;
+  min-width: 0;
 }
 
 .comparison span,
+.live-signal span,
 .command-box span {
   display: block;
   color: var(--muted);
@@ -252,7 +262,24 @@ h3 {
 }
 
 .comparison strong {
-  font-size: 24px;
+  display: block;
+  font-size: clamp(18px, 2vw, 24px);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.live-signal {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(130px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.live-signal strong {
+  display: block;
+  font-size: clamp(20px, 2vw, 26px);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
 .command-box {
@@ -428,6 +455,7 @@ th {
   .kpi-grid,
   .grid.two,
   .comparison,
+  .live-signal,
   .details-grid {
     grid-template-columns: 1fr;
   }

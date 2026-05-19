@@ -21,6 +21,7 @@ export function App() {
   const [userId, setUserId] = useState("user-90210");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
 
   async function load() {
     try {
@@ -31,6 +32,7 @@ export function App() {
       ]);
       setDemo(demoPayload);
       setExperiments(experimentList);
+      setLastRefreshedAt(new Date());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load control plane data");
     } finally {
@@ -40,6 +42,14 @@ export function App() {
 
   useEffect(() => {
     load();
+  }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      load();
+    }, 10000);
+
+    return () => window.clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -103,6 +113,7 @@ export function App() {
           <div className="hero-actions">
             <button onClick={rollback}>Rollback to old version</button>
             <button className="secondary" onClick={load}>Refresh</button>
+            {lastRefreshedAt ? <span className="refresh-note">Updated {formatClock(lastRefreshedAt)}</span> : null}
           </div>
         </section>
 
@@ -113,6 +124,7 @@ export function App() {
             controlP95={currentControl?.p95}
             treatmentP95={currentTreatment?.p95}
             errorDelta={metrics.deltas.errorRatePoints}
+            latestWindow={currentTreatment?.time || currentControl?.time}
           />
         </section>
 
@@ -136,11 +148,11 @@ export function App() {
         </section>
 
         <section className="grid two evidence-grid" id="evidence">
+          <LiveEvidencePanel regression={regression} controlP95={currentControl?.p95} treatmentP95={currentTreatment?.p95} />
           <IncidentPanel incident={incident} rollback={rollback} />
-          <TracePanel trace={trace} />
         </section>
 
-        <DetailsSection experiments={experiments} audit={audit} />
+        <DetailsSection experiments={experiments} audit={audit} trace={trace} />
       </main>
     </div>
   );
@@ -166,11 +178,12 @@ function Sidebar() {
   );
 }
 
-function HealthPanel({ regression, controlP95, treatmentP95, errorDelta }: {
+function HealthPanel({ regression, controlP95, treatmentP95, errorDelta, latestWindow }: {
   regression: Regression;
   controlP95?: number;
   treatmentP95?: number;
   errorDelta: number;
+  latestWindow?: string;
 }) {
   return (
     <article className="panel health-panel">
@@ -186,17 +199,18 @@ function HealthPanel({ regression, controlP95, treatmentP95, errorDelta }: {
       <div className="comparison">
         <div>
           <span>Old version p95</span>
-          <strong>{controlP95 ?? "--"}ms</strong>
+          <strong>{formatMs(controlP95)}</strong>
         </div>
         <div>
           <span>New version p95</span>
-          <strong>{treatmentP95 ?? "--"}ms</strong>
+          <strong>{formatMs(treatmentP95)}</strong>
         </div>
         <div>
           <span>Error delta</span>
-          <strong>+{errorDelta}</strong>
+          <strong>{formatDelta(errorDelta)}</strong>
         </div>
       </div>
+      <p className="muted">Latest metric window: {latestWindow || "waiting for target app traffic"}</p>
     </article>
   );
 }
@@ -344,10 +358,45 @@ function MetricChart({ series }: { series: MetricSeriesPoint[] }) {
 function RegressionReasons({ regression }: { regression: Regression }) {
   return (
     <div className="reasons">
-      {regression.reasons.map((reason) => (
+      {(regression.reasons.length ? regression.reasons : ["No regression detected in the latest metric window."]).map((reason) => (
         <div className="reason" key={reason}>{reason}</div>
       ))}
     </div>
+  );
+}
+
+function LiveEvidencePanel({ regression, controlP95, treatmentP95 }: {
+  regression: Regression;
+  controlP95?: number;
+  treatmentP95?: number;
+}) {
+  const latest = regression.summary.latest.treatment || regression.summary.latest.control;
+
+  return (
+    <article className="panel">
+      <div className="panel-head">
+        <div>
+          <p className="eyebrow">Live target app signal</p>
+          <h3>{latest ? `Latest window: ${latest.time}` : "Waiting for traffic"}</h3>
+        </div>
+        <span className={`pill ${regression.unhealthy ? "danger" : ""}`}>
+          {regression.unhealthy ? "Unhealthy" : "Healthy"}
+        </span>
+      </div>
+      <div className="live-signal">
+        <div>
+          <span>Control p95</span>
+          <strong>{formatMs(controlP95)}</strong>
+        </div>
+        <div>
+          <span>Treatment p95</span>
+          <strong>{formatMs(treatmentP95)}</strong>
+        </div>
+      </div>
+      <p className="muted">
+        This card updates from metric events emitted by the target app. Run <code>npm run traffic -- 100</code>, then watch this section and the chart refresh.
+      </p>
+    </article>
   );
 }
 
@@ -436,9 +485,10 @@ function AuditPanel({ audit }: { audit: AuditEvent[] }) {
   );
 }
 
-function DetailsSection({ experiments, audit }: {
+function DetailsSection({ experiments, audit, trace }: {
   experiments: Experiment[];
   audit: AuditEvent[];
+  trace: Trace;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -464,6 +514,7 @@ function DetailsSection({ experiments, audit }: {
                 </div>
               ))}
             </div>
+            <TracePanel trace={trace} />
           </div>
           <AuditPanel audit={audit} />
         </div>
@@ -530,4 +581,21 @@ function formatTime(value: string) {
     hour: "numeric",
     minute: "2-digit"
   }).format(new Date(value));
+}
+
+function formatClock(value: Date) {
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit"
+  }).format(value);
+}
+
+function formatMs(value?: number) {
+  if (value === undefined) return "--";
+  return `${Math.round(value)}ms`;
+}
+
+function formatDelta(value: number) {
+  return `${value >= 0 ? "+" : ""}${Math.round(value * 10) / 10}`;
 }
