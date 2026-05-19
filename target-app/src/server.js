@@ -1,4 +1,4 @@
-import http from "node:http";
+import express from "express";
 import { setTimeout as sleep } from "node:timers/promises";
 
 const port = Number(process.env.TARGET_APP_PORT || 4180);
@@ -8,71 +8,75 @@ const experimentId = process.env.EXPERIMENT_ID || "ranking-v2";
 const service = process.env.SERVICE_NAME || "target-search";
 const releaseSha = process.env.RELEASE_SHA || "local-ranking-v2";
 
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host}`);
+const app = express();
 
-  try {
-    if (req.method === "GET" && url.pathname === "/health") {
-      sendJson(res, 200, { ok: true, service, experimentId });
-      return;
-    }
+app.use(express.json({ limit: "1mb" }));
 
-    if (req.method === "GET" && url.pathname === "/search") {
-      const userId = url.searchParams.get("user_id") || randomUserId();
-      const query = url.searchParams.get("q") || "nyc pizza";
-      const assignment = await assignUser(userId);
-      const result = await simulateSearch({ assignment, query, userId });
+app.get("/health", (_req, res) => {
+  res.json({ ok: true, service, experimentId });
+});
 
-      await reportMetric({
-        experimentId,
-        bucket: assignment.variant,
-        userId,
-        service,
-        route: "/search",
-        statusCode: result.statusCode,
-        durationMs: result.durationMs,
-        conversion: result.conversion,
-        completion: result.completion,
-        traceId: result.traceId,
-        releaseSha
-      });
+app.get("/search", asyncHandler(async (req, res) => {
+  const userId = req.query.user_id || randomUserId();
+  const query = req.query.q || "nyc pizza";
+  const assignment = await assignUser(String(userId));
+  const result = await simulateSearch({ assignment, query: String(query), userId: String(userId) });
 
-      sendJson(res, result.statusCode, {
-        query,
-        userId,
-        experimentId,
-        variant: assignment.variant,
-        rolloutIncluded: assignment.included,
-        durationMs: result.durationMs,
-        traceId: result.traceId,
-        results: result.results,
-        error: result.error
-      });
-      return;
-    }
+  await reportMetric({
+    experimentId,
+    bucket: assignment.variant,
+    userId: String(userId),
+    service,
+    route: "/search",
+    statusCode: result.statusCode,
+    durationMs: result.durationMs,
+    conversion: result.conversion,
+    completion: result.completion,
+    traceId: result.traceId,
+    releaseSha
+  });
 
-    if (req.method === "POST" && url.pathname === "/traffic") {
-      const body = await readJson(req);
-      const count = Math.max(1, Math.min(500, Number(body.count || 50)));
-      const users = Array.from({ length: count }, (_, index) => `load-user-${index + 1}`);
-      const results = [];
+  res.status(result.statusCode).json({
+    query,
+    userId,
+    experimentId,
+    variant: assignment.variant,
+    rolloutIncluded: assignment.included,
+    durationMs: result.durationMs,
+    traceId: result.traceId,
+    results: result.results,
+    error: result.error
+  });
+}));
 
-      for (const userId of users) {
-        const response = await fetch(`http://${host}:${port}/search?user_id=${encodeURIComponent(userId)}&q=ranking`);
-        results.push({ userId, status: response.status });
-      }
+app.post("/traffic", asyncHandler(async (req, res) => {
+  const count = Math.max(1, Math.min(500, Number(req.body.count || 50)));
+  const users = Array.from({ length: count }, (_value, index) => `load-user-${index + 1}`);
+  const results = [];
 
-      sendJson(res, 200, {
-        generated: count,
-        failures: results.filter((result) => result.status >= 500).length
-      });
-      return;
-    }
-
-    sendJson(res, 404, { error: "Route not found" });
-  } catch (error) {
-    sendJson(res, 500, { error: error.message });
+  for (const userId of users) {
+    const response = await fetch(`http://${host}:${port}/search?user_id=${encodeURIComponent(userId)}&q=ranking`);
+    results.push({ userId, status: response.status });
   }
+
+  res.json({
+    generated: count,
+    failures: results.filter((result) => result.status >= 500).length
+  });
+}));
+
+app.use((_req, res) => {
+  res.status(404).json({ error: "Route not found" });
+});
+
+app.use((error, _req, res, _next) => {
+  console.error(error);
+  res.status(500).json({ error: error.message || "Internal server error" });
+});
+
+const server = app.listen(port, host, () => {
+  console.log(`Target Search app running at http://${host}:${port}`);
+  console.log(`Reporting metrics to ${controlPlaneUrl}`);
 });
 
 server.on("error", (error) => {
@@ -81,11 +85,6 @@ server.on("error", (error) => {
     process.exit(1);
   }
   throw error;
-});
-
-server.listen(port, host, () => {
-  console.log(`Target Search app running at http://${host}:${port}`);
-  console.log(`Reporting metrics to ${controlPlaneUrl}`);
 });
 
 async function assignUser(userId) {
@@ -148,18 +147,10 @@ async function reportMetric(event) {
   }
 }
 
-async function readJson(req) {
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  return chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : {};
-}
-
-function sendJson(res, status, payload) {
-  res.writeHead(status, {
-    "content-type": "application/json",
-    "access-control-allow-origin": "*"
-  });
-  res.end(JSON.stringify(payload));
+function asyncHandler(handler) {
+  return (req, res, next) => {
+    Promise.resolve(handler(req, res, next)).catch(next);
+  };
 }
 
 function randomUserId() {

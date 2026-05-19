@@ -1,35 +1,17 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
+import express from "express";
 import { assignUser } from "../services/bucketing.js";
 import { detectRegression } from "../services/regression.js";
 import { summarizeMetrics } from "../services/metrics.js";
 import { rollbackIncident, updateRollout } from "../services/rollout.js";
 
-export function createRouter(store, publicDir) {
-  return async function route(req, res) {
-    const url = new URL(req.url, `http://${req.headers.host}`);
+export function createApiRouter(store) {
+  const router = express.Router();
 
-    try {
-      if (url.pathname.startsWith("/api/")) {
-        await routeApi(req, res, url, store);
-        return;
-      }
-
-      const filePath = url.pathname === "/"
-        ? path.join(publicDir, "index.html")
-        : path.join(publicDir, url.pathname);
-      await serveStatic(res, filePath, publicDir);
-    } catch (error) {
-      sendJson(res, 500, { error: error.message });
-    }
-  };
-}
-
-async function routeApi(req, res, url, store) {
-  if (req.method === "GET" && url.pathname === "/api/demo") {
+  router.get("/demo", asyncHandler(async (_req, res) => {
     const experiment = await store.getExperiment("ranking-v2");
     const regression = detectRegression(await store.metricsFor(experiment.id));
-    sendJson(res, 200, {
+
+    res.json({
       experiment,
       metrics: regression.summary,
       regression,
@@ -37,118 +19,87 @@ async function routeApi(req, res, url, store) {
       trace: await store.getTrace("trc-8f4a"),
       audit: await store.listAuditEvents()
     });
-    return;
-  }
+  }));
 
-  if (req.method === "GET" && url.pathname === "/api/experiments") {
-    sendJson(res, 200, await store.listExperiments());
-    return;
-  }
+  router.get("/experiments", asyncHandler(async (_req, res) => {
+    res.json(await store.listExperiments());
+  }));
 
-  const experimentMatch = url.pathname.match(/^\/api\/experiments\/([^/]+)$/);
-  if (req.method === "GET" && experimentMatch) {
-    const experiment = await store.getExperiment(experimentMatch[1]);
-    sendJson(res, experiment ? 200 : 404, experiment || { error: "Experiment not found" });
-    return;
-  }
-
-  const rolloutMatch = url.pathname.match(/^\/api\/experiments\/([^/]+)\/rollout$/);
-  if (req.method === "PATCH" && rolloutMatch) {
-    const body = await readJson(req);
-    const experiment = await updateRollout(store, rolloutMatch[1], body.rolloutPercentage, body.actor);
-    sendJson(res, experiment ? 200 : 404, experiment || { error: "Experiment not found" });
-    return;
-  }
-
-  if (req.method === "POST" && url.pathname === "/api/assignments") {
-    const body = await readJson(req);
-    const experiment = await store.getExperiment(body.experimentId);
+  router.get("/experiments/:id", asyncHandler(async (req, res) => {
+    const experiment = await store.getExperiment(req.params.id);
     if (!experiment) {
-      sendJson(res, 404, { error: "Experiment not found" });
+      res.status(404).json({ error: "Experiment not found" });
       return;
     }
-    sendJson(res, 200, assignUser({
-      experimentId: body.experimentId,
-      userId: body.userId,
+    res.json(experiment);
+  }));
+
+  router.patch("/experiments/:id/rollout", asyncHandler(async (req, res) => {
+    const experiment = await updateRollout(store, req.params.id, req.body.rolloutPercentage, req.body.actor);
+    if (!experiment) {
+      res.status(404).json({ error: "Experiment not found" });
+      return;
+    }
+    res.json(experiment);
+  }));
+
+  router.post("/assignments", asyncHandler(async (req, res) => {
+    const experiment = await store.getExperiment(req.body.experimentId);
+    if (!experiment) {
+      res.status(404).json({ error: "Experiment not found" });
+      return;
+    }
+
+    res.json(assignUser({
+      experimentId: req.body.experimentId,
+      userId: req.body.userId,
       rolloutPercentage: experiment.rolloutPercentage
     }));
-    return;
-  }
+  }));
 
-  if (req.method === "POST" && url.pathname === "/api/metrics/events") {
-    const body = await readJson(req);
-    sendJson(res, 201, await store.addMetricEvent(body));
-    return;
-  }
+  router.post("/metrics/events", asyncHandler(async (req, res) => {
+    res.status(201).json(await store.addMetricEvent(req.body));
+  }));
 
-  if (req.method === "GET" && url.pathname === "/api/metrics/summary") {
-    const experimentId = url.searchParams.get("experiment_id");
-    sendJson(res, 200, summarizeMetrics(await store.metricsFor(experimentId)));
-    return;
-  }
+  router.get("/metrics/summary", asyncHandler(async (req, res) => {
+    res.json(summarizeMetrics(await store.metricsFor(req.query.experiment_id)));
+  }));
 
-  if (req.method === "GET" && url.pathname === "/api/incidents") {
-    sendJson(res, 200, await store.listIncidents());
-    return;
-  }
+  router.get("/incidents", asyncHandler(async (_req, res) => {
+    res.json(await store.listIncidents());
+  }));
 
-  const rollbackMatch = url.pathname.match(/^\/api\/incidents\/([^/]+)\/rollback$/);
-  if (req.method === "POST" && rollbackMatch) {
-    const body = await readJson(req);
-    const result = await rollbackIncident(store, rollbackMatch[1], body.actor);
-    sendJson(res, result ? 200 : 404, result || { error: "Incident not found" });
-    return;
-  }
+  router.post("/incidents/:id/rollback", asyncHandler(async (req, res) => {
+    const result = await rollbackIncident(store, req.params.id, req.body.actor);
+    if (!result) {
+      res.status(404).json({ error: "Incident not found" });
+      return;
+    }
+    res.json(result);
+  }));
 
-  if (req.method === "GET" && url.pathname === "/api/audit") {
-    sendJson(res, 200, await store.listAuditEvents());
-    return;
-  }
+  router.get("/audit", asyncHandler(async (_req, res) => {
+    res.json(await store.listAuditEvents());
+  }));
 
-  const traceMatch = url.pathname.match(/^\/api\/traces\/([^/]+)$/);
-  if (req.method === "GET" && traceMatch) {
-    const trace = await store.getTrace(traceMatch[1]);
-    sendJson(res, trace ? 200 : 404, trace || { error: "Trace not found" });
-    return;
-  }
+  router.get("/traces/:traceId", asyncHandler(async (req, res) => {
+    const trace = await store.getTrace(req.params.traceId);
+    if (!trace) {
+      res.status(404).json({ error: "Trace not found" });
+      return;
+    }
+    res.json(trace);
+  }));
 
-  sendJson(res, 404, { error: "Route not found" });
-}
-
-async function readJson(req) {
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  return chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : {};
-}
-
-function sendJson(res, status, payload) {
-  res.writeHead(status, {
-    "content-type": "application/json",
-    "access-control-allow-origin": "*"
+  router.use((_req, res) => {
+    res.status(404).json({ error: "Route not found" });
   });
-  res.end(JSON.stringify(payload));
+
+  return router;
 }
 
-async function serveStatic(res, filePath, publicDir) {
-  const resolved = path.resolve(filePath);
-  if (!resolved.startsWith(path.resolve(publicDir))) {
-    sendJson(res, 403, { error: "Forbidden" });
-    return;
-  }
-
-  let content;
-  try {
-    content = await readFile(resolved);
-  } catch {
-    sendJson(res, 404, { error: "File not found" });
-    return;
-  }
-  const ext = path.extname(resolved);
-  const types = {
-    ".html": "text/html; charset=utf-8",
-    ".css": "text/css; charset=utf-8",
-    ".js": "text/javascript; charset=utf-8"
+function asyncHandler(handler) {
+  return (req, res, next) => {
+    Promise.resolve(handler(req, res, next)).catch(next);
   };
-  res.writeHead(200, { "content-type": types[ext] || "application/octet-stream" });
-  res.end(content);
 }
