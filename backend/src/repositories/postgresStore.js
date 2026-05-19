@@ -251,6 +251,22 @@ export class PostgresStore {
       values.push(patch.status);
       updates.push(`status = $${values.length}`);
     }
+    if (patch.title !== undefined) {
+      values.push(patch.title);
+      updates.push(`title = $${values.length}`);
+    }
+    if (patch.severity !== undefined) {
+      values.push(patch.severity);
+      updates.push(`severity = $${values.length}`);
+    }
+    if (patch.summary !== undefined) {
+      values.push(patch.summary);
+      updates.push(`summary = $${values.length}`);
+    }
+    if (patch.recommendedAction !== undefined) {
+      values.push(patch.recommendedAction);
+      updates.push(`recommended_action = $${values.length}`);
+    }
     if (patch.mitigatedAt !== undefined) {
       values.push(patch.mitigatedAt);
       updates.push(`mitigated_at = $${values.length}`);

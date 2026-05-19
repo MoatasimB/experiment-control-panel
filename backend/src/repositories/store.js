@@ -73,6 +73,12 @@ export class Store {
     return incident;
   }
 
+  appendTimelineEvent(incidentId, event) {
+    const incident = this.getIncident(incidentId);
+    if (!incident) return;
+    incident.timeline.push(event);
+  }
+
   getTrace(id) {
     return this.traces.find((trace) => trace.id === id);
   }

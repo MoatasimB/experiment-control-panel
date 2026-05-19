@@ -4,6 +4,7 @@ import { detectRegression } from "../services/regression.js";
 import { summarizeMetrics } from "../services/metrics.js";
 import { rollbackIncident, updateRollout } from "../services/rollout.js";
 import { analyzeIncidentWithAi } from "../services/aiIncidentAnalysis.js";
+import { updateIncidentFromLiveMetrics } from "../services/incidentDetection.js";
 
 export function createApiRouter(store) {
   const router = express.Router();
@@ -59,7 +60,9 @@ export function createApiRouter(store) {
   }));
 
   router.post("/metrics/events", asyncHandler(async (req, res) => {
-    res.status(201).json(await store.addMetricEvent(req.body));
+    const event = await store.addMetricEvent(req.body);
+    const incident = await updateIncidentFromLiveMetrics(store, req.body.experimentId);
+    res.status(201).json({ event, incident });
   }));
 
   router.get("/metrics/summary", asyncHandler(async (req, res) => {

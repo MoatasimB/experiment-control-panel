@@ -747,7 +747,7 @@ function formatRecommendation(value: string) {
 }
 
 function isSeedTimelineItem(type: string) {
-  return type !== "rollback";
+  return !["rollback", "live_metric", "recovery"].includes(type);
 }
 
 function isSeedAuditEvent(id: string) {

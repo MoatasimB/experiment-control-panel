@@ -113,7 +113,7 @@ Run the local target app in a third terminal:
 npm run dev:target
 ```
 
-Then generate simulated search traffic:
+Then generate simulated search traffic via UI or:
 
 ```bash
 npm run traffic -- 100
