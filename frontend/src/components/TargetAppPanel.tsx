@@ -37,7 +37,7 @@ export function TargetAppPanel({ onTrafficGenerated }: { onTrafficGenerated: () 
         </div>
       </div>
       <p className="muted">
-        The target search app asks this control plane who should see the new feature, serves old or new behavior, then reports latency and errors back as metric events.
+        The target search app asks this control plane who should see the experimental feature, serves current or experimental behavior, then reports latency and errors back as metric events.
       </p>
       <div className="command-box">
         <span>Generate local traffic</span>

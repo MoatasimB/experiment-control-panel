@@ -15,7 +15,7 @@ export function RolloutPanel({ experiment, setRollout }: {
         <span className="pill">{formatStatus(experiment.status)}</span>
       </div>
       <label className="range-label" htmlFor="rollout-slider">
-        Treatment traffic
+        Experimental traffic
         <strong>{experiment.rolloutPercentage}%</strong>
       </label>
       <input

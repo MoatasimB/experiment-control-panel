@@ -33,11 +33,11 @@ export function HealthPanel({
       </div>
       <div className="comparison">
         <div>
-          <span>Old version p95</span>
+          <span>Current version p95</span>
           <strong>{formatMs(controlP95)}</strong>
         </div>
         <div>
-          <span>New version p95</span>
+          <span>Experimental version p95</span>
           <strong>{formatMs(treatmentP95)}</strong>
         </div>
         <div>
@@ -49,9 +49,9 @@ export function HealthPanel({
         {hasComparableLiveMetrics
           ? `Latest live target-app window: ${latestWindow}`
           : hasLiveMetrics && rolloutPercentage === 0
-            ? "Rollout is 0%, so generated traffic is control-only. Raise rollout to compare treatment again."
+            ? "Rollback is active. New traffic updates the current version only; experimental data stays blank until rollout is increased."
             : hasLiveMetrics
-              ? "Live control traffic arrived. Waiting for treatment traffic in the same window."
+              ? "Live current-version traffic arrived. Waiting for experimental traffic in the same window."
               : "Run npm run traffic -- 100 to generate live target-app metrics."}
       </p>
     </article>

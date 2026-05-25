@@ -25,16 +25,16 @@ export function LiveEvidencePanel({
           <h3>{hasLiveMetrics ? `Latest live window: ${latestWindow}` : "Waiting for target-app traffic"}</h3>
         </div>
         <span className={`pill ${unhealthy ? "danger" : ""}`}>
-          {hasComparableLiveMetrics ? unhealthy ? "Unhealthy" : "Healthy" : hasLiveMetrics ? "Control only" : "No live data"}
+          {hasComparableLiveMetrics ? unhealthy ? "Unhealthy" : "Healthy" : hasLiveMetrics ? "Current only" : "No live data"}
         </span>
       </div>
       <div className="live-signal">
         <div>
-          <span>Control p95</span>
+          <span>Current version p95</span>
           <strong>{formatMs(controlP95)}</strong>
         </div>
         <div>
-          <span>Treatment p95</span>
+          <span>Experimental version p95</span>
           <strong>{formatMs(treatmentP95)}</strong>
         </div>
       </div>
@@ -42,9 +42,9 @@ export function LiveEvidencePanel({
         {hasComparableLiveMetrics
           ? "This card is based on metric events emitted by the target app."
           : hasLiveMetrics && rolloutPercentage === 0
-            ? "Rollback is active, so new target-app traffic should only populate the control side."
+            ? "Rollback is active, so new target-app traffic updates only the current version."
             : hasLiveMetrics
-              ? "Live data exists, but treatment has not arrived for the latest live window yet."
+              ? "Live data exists, but experimental traffic has not arrived for the latest live window yet."
               : <>Run <code>npm run traffic -- 100</code>, then watch this card and the chart update.</>}
       </p>
     </article>

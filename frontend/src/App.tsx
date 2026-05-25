@@ -123,7 +123,7 @@ export function App() {
           <div>
             <p className="eyebrow">What is happening</p>
             <h2>{experiment.rolloutPercentage}% of users can see the new ranking feature.</h2>
-            <p>Control users get the old search behavior. Treatment users get the new ranking model from the target app. This page compares the two groups and lets you roll back if treatment looks unhealthy.</p>
+            <p>Current-version users get the stable search behavior. Experimental-version users get the new ranking model from the target app. This page compares the two groups and lets you roll back if experimental traffic looks unhealthy.</p>
           </div>
           <div className="hero-actions">
             <button onClick={rollback}>Rollback to old version</button>
@@ -155,7 +155,7 @@ export function App() {
           <div className="panel-head">
             <div>
               <p className="eyebrow">Metrics</p>
-              <h3>Control vs treatment</h3>
+              <h3>Current vs experimental</h3>
             </div>
             <span className={`pill ${regression.unhealthy ? "danger" : ""}`}>
               {liveMetrics.hasLiveMetrics

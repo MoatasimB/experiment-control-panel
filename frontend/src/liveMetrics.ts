@@ -43,15 +43,15 @@ export function isUnhealthy(deltas: { p95Percent: number; errorRatePoints: numbe
 
 export function healthHeading(state: LiveHealthState) {
   if (!state.hasLiveMetrics) return "Waiting for live traffic";
-  if (!state.hasComparableLiveMetrics && state.rolloutPercentage === 0) return "Rollback is serving control only";
-  if (!state.hasComparableLiveMetrics) return "Waiting for treatment traffic";
-  return state.unhealthy ? "Treatment looks unsafe" : "Treatment looks healthy";
+  if (!state.hasComparableLiveMetrics && state.rolloutPercentage === 0) return "Rollback is serving current version only";
+  if (!state.hasComparableLiveMetrics) return "Waiting for experimental traffic";
+  return state.unhealthy ? "Experimental version looks unsafe" : "Experimental version looks healthy";
 }
 
 export function healthBadge(state: LiveHealthState) {
   if (!state.hasLiveMetrics) return "No live data yet";
   if (!state.hasComparableLiveMetrics && state.rolloutPercentage === 0) return "Rolled back";
-  if (!state.hasComparableLiveMetrics) return "Control only";
+  if (!state.hasComparableLiveMetrics) return "Current only";
   return state.unhealthy ? "Rollback recommended" : "Continue rollout";
 }
 

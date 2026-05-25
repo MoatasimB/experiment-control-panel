@@ -27,8 +27,8 @@ export function drawMetricChart(ctx: CanvasRenderingContext2D, series: MetricSer
     ctx.fillText(point.time, xAt(index, series.length, width, pad) - 14, height - 12);
   });
 
-  drawLegend(ctx, "Control p95", "#1c7c54", 64);
-  drawLegend(ctx, "Treatment p95", "#b42318", 178);
+  drawLegend(ctx, "Current p95", "#1c7c54", 64);
+  drawLegend(ctx, "Experimental p95", "#b42318", 178);
 }
 
 function drawLine(
