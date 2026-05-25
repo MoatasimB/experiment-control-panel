@@ -20,7 +20,27 @@ User calls target app
 
 The important idea is that the target app does not decide rollout rules by itself. It asks the control plane for an assignment and reports what happened.
 
-To connect another app to this project, that app needs to do two things:
+The easiest integration path is the local Node SDK in `sdk/node`. It wraps assignment lookup, control/treatment routing, request timing, error capture, and metric reporting:
+
+```js
+import { createRcpClient } from "./sdk/node/index.js";
+
+const rcp = createRcpClient({
+  controlPlaneUrl: "http://127.0.0.1:4173",
+  experimentId: "ranking-v2",
+  service: "target-search",
+  releaseSha: "local-ranking-v2"
+});
+
+const { assignment, result } = await rcp.runExperiment({
+  userId: "user-123",
+  route: "/search",
+  control: () => oldSearch(),
+  treatment: () => newSearch()
+});
+```
+
+Apps can also call the APIs directly. Direct integration requires two calls:
 
 1. Ask for assignment before serving the feature:
 
@@ -218,6 +238,12 @@ backend/
     server.js     HTTP server + static hosting
   data/
     seed.json     realistic demo data
+sdk/
+  node/
+    index.js      Node client SDK for assignment, routing, and metrics
+target-app/
+  src/
+    server.js     simulated app integrated through the SDK
 tests/
   *.test.js       service-level tests
 ```

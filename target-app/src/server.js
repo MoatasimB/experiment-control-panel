@@ -1,5 +1,6 @@
 import express from "express";
 import { setTimeout as sleep } from "node:timers/promises";
+import { createRcpClient } from "../../sdk/node/index.js";
 
 const port = Number(process.env.TARGET_APP_PORT || 4180);
 const host = process.env.HOST || "127.0.0.1";
@@ -9,6 +10,7 @@ const service = process.env.SERVICE_NAME || "target-search";
 const releaseSha = process.env.RELEASE_SHA || "local-ranking-v2";
 
 const app = express();
+const rcp = createRcpClient({ controlPlaneUrl, experimentId, service, releaseSha });
 
 app.use((req, res, next) => {
   res.setHeader("access-control-allow-origin", "*");
@@ -30,21 +32,22 @@ app.get("/health", (_req, res) => {
 app.get("/search", asyncHandler(async (req, res) => {
   const userId = req.query.user_id || randomUserId();
   const query = req.query.q || "nyc pizza";
-  const assignment = await assignUser(String(userId));
-  const result = await simulateSearch({ assignment, query: String(query), userId: String(userId) });
 
-  await reportMetric({
-    experimentId,
-    bucket: assignment.variant,
+  const { assignment, result, durationMs } = await rcp.runExperiment({
     userId: String(userId),
-    service,
     route: "/search",
-    statusCode: result.statusCode,
-    durationMs: result.durationMs,
-    conversion: result.conversion,
-    completion: result.completion,
-    traceId: result.traceId,
-    releaseSha
+    control: ({ traceId }) => simulateSearch({
+      variant: "control",
+      query: String(query),
+      userId: String(userId),
+      traceId
+    }),
+    treatment: ({ traceId }) => simulateSearch({
+      variant: "treatment",
+      query: String(query),
+      userId: String(userId),
+      traceId
+    })
   });
 
   res.status(result.statusCode).json({
@@ -53,7 +56,7 @@ app.get("/search", asyncHandler(async (req, res) => {
     experimentId,
     variant: assignment.variant,
     rolloutIncluded: assignment.included,
-    durationMs: result.durationMs,
+    durationMs,
     traceId: result.traceId,
     results: result.results,
     error: result.error
@@ -98,22 +101,8 @@ server.on("error", (error) => {
   throw error;
 });
 
-async function assignUser(userId) {
-  const response = await fetch(`${controlPlaneUrl}/api/assignments`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ experimentId, userId })
-  });
-
-  if (!response.ok) {
-    throw new Error(`Assignment failed with status ${response.status}`);
-  }
-
-  return response.json();
-}
-
-async function simulateSearch({ assignment, query, userId }) {
-  const treatment = assignment.variant === "treatment";
+async function simulateSearch({ variant, query, userId, traceId }) {
+  const treatment = variant === "treatment";
   const base = treatment ? 120 : 55;
   const jitter = stableNumber(`${userId}:${query}`) % (treatment ? 260 : 80);
   const failure = treatment && (stableNumber(`${userId}:failure`) % 100) < 28;
@@ -127,7 +116,7 @@ async function simulateSearch({ assignment, query, userId }) {
       durationMs,
       conversion: false,
       completion: false,
-      traceId: `trg-${stableNumber(`${userId}:trace`).toString(16)}`,
+      traceId,
       results: [],
       error: "feature-store timeout while scoring ranking-v2 candidates"
     };
@@ -138,24 +127,12 @@ async function simulateSearch({ assignment, query, userId }) {
     durationMs,
     conversion: treatment ? durationMs < 260 : durationMs < 180,
     completion: true,
-    traceId: `trg-${stableNumber(`${userId}:trace`).toString(16)}`,
+    traceId,
     results: [
       { title: "Local result", score: treatment ? 0.94 : 0.88 },
       { title: "Nearby result", score: treatment ? 0.91 : 0.84 }
     ]
   };
-}
-
-async function reportMetric(event) {
-  const response = await fetch(`${controlPlaneUrl}/api/metrics/events`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(event)
-  });
-
-  if (!response.ok) {
-    throw new Error(`Metric ingestion failed with status ${response.status}`);
-  }
 }
 
 function asyncHandler(handler) {
