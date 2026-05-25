@@ -29,14 +29,14 @@ const rcp = createRcpClient({
   controlPlaneUrl: "http://127.0.0.1:4173",
   experimentId: "ranking-v2",
   service: "target-search",
-  releaseSha: "local-ranking-v2"
+  releaseSha: "local-ranking-v2",
 });
 
 const { assignment, result } = await rcp.runExperiment({
   userId: "user-123",
   route: "/search",
   control: () => oldSearch(),
-  treatment: () => newSearch()
+  treatment: () => newSearch(),
 });
 ```
 
@@ -187,12 +187,6 @@ postgresql://rcp_user:rcp_password@127.0.0.1:55432/rcp_dev
 ```
 
 For backend integration, copy `.env.example` to `.env` and keep the same `DATABASE_URL` unless you change the database credentials.
-
-Open a SQL shell:
-
-```bash
-npm run db:psql
-```
 
 Reset all local database data:
 
