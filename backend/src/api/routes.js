@@ -5,6 +5,14 @@ import { summarizeMetrics } from "../services/metrics.js";
 import { rollbackIncident, updateRollout } from "../services/rollout.js";
 import { analyzeIncidentWithAi } from "../services/aiIncidentAnalysis.js";
 import { updateIncidentFromLiveMetrics } from "../services/incidentDetection.js";
+import {
+  handleValidationError,
+  validateActorBody,
+  validateAssignmentBody,
+  validateExperimentIdQuery,
+  validateMetricEventBody,
+  validateRolloutBody
+} from "./validation.js";
 
 export function createApiRouter(store) {
   const router = express.Router();
@@ -37,7 +45,8 @@ export function createApiRouter(store) {
   }));
 
   router.patch("/experiments/:id/rollout", asyncHandler(async (req, res) => {
-    const experiment = await updateRollout(store, req.params.id, req.body.rolloutPercentage, req.body.actor);
+    const body = validateRolloutBody(req.body);
+    const experiment = await updateRollout(store, req.params.id, body.rolloutPercentage, body.actor);
     if (!experiment) {
       res.status(404).json({ error: "Experiment not found" });
       return;
@@ -46,27 +55,30 @@ export function createApiRouter(store) {
   }));
 
   router.post("/assignments", asyncHandler(async (req, res) => {
-    const experiment = await store.getExperiment(req.body.experimentId);
+    const body = validateAssignmentBody(req.body);
+    const experiment = await store.getExperiment(body.experimentId);
     if (!experiment) {
       res.status(404).json({ error: "Experiment not found" });
       return;
     }
 
     res.json(assignUser({
-      experimentId: req.body.experimentId,
-      userId: req.body.userId,
+      experimentId: body.experimentId,
+      userId: body.userId,
       rolloutPercentage: experiment.rolloutPercentage
     }));
   }));
 
   router.post("/metrics/events", asyncHandler(async (req, res) => {
-    const event = await store.addMetricEvent(req.body);
-    const incident = await updateIncidentFromLiveMetrics(store, req.body.experimentId);
+    const body = validateMetricEventBody(req.body);
+    const event = await store.addMetricEvent(body);
+    const incident = await updateIncidentFromLiveMetrics(store, body.experimentId);
     res.status(201).json({ event, incident });
   }));
 
   router.get("/metrics/summary", asyncHandler(async (req, res) => {
-    res.json(summarizeMetrics(await store.metricsFor(req.query.experiment_id)));
+    const query = validateExperimentIdQuery(req.query);
+    res.json(summarizeMetrics(await store.metricsFor(query.experimentId)));
   }));
 
   router.get("/incidents", asyncHandler(async (_req, res) => {
@@ -74,7 +86,8 @@ export function createApiRouter(store) {
   }));
 
   router.post("/incidents/:id/rollback", asyncHandler(async (req, res) => {
-    const result = await rollbackIncident(store, req.params.id, req.body.actor);
+    const body = validateActorBody(req.body);
+    const result = await rollbackIncident(store, req.params.id, body.actor);
     if (!result) {
       res.status(404).json({ error: "Incident not found" });
       return;
@@ -113,6 +126,9 @@ export function createApiRouter(store) {
 
 function asyncHandler(handler) {
   return (req, res, next) => {
-    Promise.resolve(handler(req, res, next)).catch(next);
+    Promise.resolve(handler(req, res, next)).catch((error) => {
+      if (handleValidationError(error, res)) return;
+      next(error);
+    });
   };
 }
